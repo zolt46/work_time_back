@@ -1,7 +1,7 @@
 # File: /backend/app/schemas.py
 from datetime import datetime, date, time
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from .models import UserRole, RequestType, RequestStatus
 
 class Token(BaseModel):
@@ -29,9 +29,9 @@ class UserUpdate(BaseModel):
     active: Optional[bool]
 
 class UserOut(UserBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
-    class Config:
-        orm_mode = True
 
 class PasswordChange(BaseModel):
     old_password: str
@@ -48,9 +48,9 @@ class ShiftCreate(ShiftBase):
     pass
 
 class ShiftOut(ShiftBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: str
-    class Config:
-        orm_mode = True
 
 class AssignmentCreate(BaseModel):
     user_id: str
@@ -59,13 +59,13 @@ class AssignmentCreate(BaseModel):
     valid_to: Optional[date] = None
 
 class AssignmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str
     shift_id: str
     valid_from: date
     valid_to: Optional[date]
-    class Config:
-        orm_mode = True
 
 class RequestCreate(BaseModel):
     type: RequestType
@@ -77,6 +77,8 @@ class RequestAction(BaseModel):
     decision: RequestStatus
 
 class RequestOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str
     type: RequestType
@@ -87,10 +89,10 @@ class RequestOut(BaseModel):
     operator_id: Optional[str]
     decided_at: Optional[datetime]
     created_at: datetime
-    class Config:
-        orm_mode = True
 
 class AuditLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     actor_user_id: Optional[str]
     action_type: str
@@ -98,5 +100,3 @@ class AuditLogOut(BaseModel):
     request_id: Optional[str]
     details: Optional[dict]
     created_at: datetime
-    class Config:
-        orm_mode = True
