@@ -1,5 +1,6 @@
 # File: /backend/app/schemas.py
 from datetime import datetime, date, time
+import enum
 from typing import Optional, List
 from uuid import UUID  # ✅ UUID 타입 추가
 
@@ -44,11 +45,23 @@ class UserOut(UserBase):
 
     # 🔧 DB에서 UUID 컬럼이므로 UUID 타입으로 맞춰줌
     id: UUID
+    auth_account: "AuthAccountOut | None" = None
 
 
 class PasswordChange(BaseModel):
     old_password: str
     new_password: str = Field(min_length=8)
+
+
+class AccountUpdate(BaseModel):
+    current_password: str
+    new_login_id: str | None = None
+    new_password: str | None = Field(default=None, min_length=8)
+
+
+class CredentialAdminUpdate(BaseModel):
+    new_login_id: str | None = None
+    new_password: str | None = Field(default=None, min_length=8)
 
 
 class ShiftBase(BaseModel):
@@ -123,3 +136,24 @@ class AuditLogOut(BaseModel):
     request_id: Optional[UUID]
     details: Optional[dict]
     created_at: datetime
+
+
+class AuthAccountOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    login_id: str
+    last_login_at: datetime | None = None
+
+
+class ResetScope(str, enum.Enum):
+    MEMBERS = "members"
+    OPERATORS_AND_MEMBERS = "operators_members"
+    ALL = "all"
+
+
+class ResetRequest(BaseModel):
+    scope: ResetScope
+
+
+# Forward references
+UserOut.model_rebuild()

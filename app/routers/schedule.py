@@ -12,7 +12,10 @@ router = APIRouter(prefix="/schedule", tags=["schedule"])
 
 @router.get("/global")
 def global_schedule(start: date | None = None, end: date | None = None, db: Session = Depends(get_db), current=Depends(require_role(models.UserRole.MEMBER))):
-    assignments = db.query(models.UserShift).join(models.Shift).join(models.User).all()
+    query = db.query(models.UserShift).join(models.Shift).join(models.User)
+    if current.role == models.UserRole.MEMBER:
+        query = query.filter(models.UserShift.user_id == current.id)
+    assignments = query.all()
     data = []
     for a in assignments:
         data.append({
@@ -35,6 +38,11 @@ def global_schedule(start: date | None = None, end: date | None = None, db: Sess
 @router.get("/me", response_model=list[schemas.AssignmentOut])
 def my_schedule(current=Depends(get_current_user), db: Session = Depends(get_db)):
     return db.query(models.UserShift).filter(models.UserShift.user_id == current.id).all()
+
+
+@router.get("/shifts", response_model=list[schemas.ShiftOut])
+def list_shifts(db: Session = Depends(get_db), current=Depends(require_role(models.UserRole.MEMBER))):
+    return db.query(models.Shift).order_by(models.Shift.weekday, models.Shift.start_time).all()
 
 
 @router.post("/shifts", response_model=schemas.ShiftOut)
