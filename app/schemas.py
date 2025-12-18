@@ -103,7 +103,8 @@ class AssignmentOut(BaseModel):
 class RequestCreate(BaseModel):
     type: RequestType
     target_date: date
-    target_shift_id: UUID  # 🔧 UUID
+    target_shift_id: UUID | None = None  # 🔧 UUID (단일 선택)
+    target_shift_ids: list[UUID] | None = None  # 다중 슬롯 지원
     reason: str = Field(min_length=1)
     user_id: UUID | None = None
 
@@ -127,6 +128,18 @@ class RequestOut(BaseModel):
     created_at: datetime
 
 
+class RequestLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    actor_user_id: Optional[UUID]
+    action_type: str
+    target_user_id: Optional[UUID]
+    request_id: Optional[UUID]
+    details: Optional[dict]
+    created_at: datetime
+
+
 class AuditLogOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -134,6 +147,21 @@ class AuditLogOut(BaseModel):
     actor_user_id: Optional[UUID]
     action_type: str
     target_user_id: Optional[UUID]
+    request_id: Optional[UUID]
+    details: Optional[dict]
+    created_at: datetime
+
+
+class HistoryEntry(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    action_type: str
+    action_label: str
+    actor_user_id: Optional[UUID]
+    actor_name: Optional[str]
+    target_user_id: Optional[UUID]
+    target_name: Optional[str]
     request_id: Optional[UUID]
     details: Optional[dict]
     created_at: datetime
@@ -172,6 +200,19 @@ class SlotAssign(BaseModel):
     valid_from: date
     valid_to: Optional[date] = None
     location: str | None = None
+
+
+class ScheduleEvent(BaseModel):
+    user_id: UUID
+    user_name: str
+    role: UserRole
+    date: date
+    start_time: time
+    end_time: time
+    shift_id: UUID
+    shift_name: str
+    location: str | None = None
+    source: str = "BASE"  # BASE, EXTRA, ABSENCE
 
 
 # Forward references

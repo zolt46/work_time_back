@@ -9,6 +9,7 @@ from ..deps import get_db
 from .. import models, schemas
 from ..core.roles import require_role
 from ..core.security import get_password_hash
+from ..core.audit import record_log
 
 router = APIRouter(tags=["system"])
 
@@ -63,5 +64,12 @@ def reset_data(payload: schemas.ResetRequest, db: Session = Depends(get_db), cur
         _seed_master(db)
         detail = "All data cleared and master reseeded"
 
+    db.commit()
+    record_log(
+        db,
+        actor_id=str(current.id),
+        action="RESET_DATA",
+        details={"scope": scope.value},
+    )
     db.commit()
     return {"detail": detail, "scope": scope.value}
