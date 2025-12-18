@@ -29,7 +29,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     login_id: str
-    password: str = Field(min_length=8)
+    password: str = Field(min_length=1)
 
 
 class UserUpdate(BaseModel):
@@ -61,7 +61,7 @@ class AccountUpdate(BaseModel):
 
 class CredentialAdminUpdate(BaseModel):
     new_login_id: str | None = None
-    new_password: str | None = Field(default=None, min_length=8)
+    new_password: str | None = Field(default=None, min_length=1)
 
 
 class ShiftBase(BaseModel):
