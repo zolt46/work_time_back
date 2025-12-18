@@ -1,5 +1,5 @@
 # File: /backend/app/routers/schedule.py
-from datetime import date
+from datetime import date, time as time_obj
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -43,6 +43,60 @@ def my_schedule(current=Depends(get_current_user), db: Session = Depends(get_db)
 @router.get("/shifts", response_model=list[schemas.ShiftOut])
 def list_shifts(db: Session = Depends(get_db), current=Depends(require_role(models.UserRole.MEMBER))):
     return db.query(models.Shift).order_by(models.Shift.weekday, models.Shift.start_time).all()
+
+
+def _ensure_slot(db: Session, slot: schemas.ShiftSlot) -> models.Shift:
+    existing = db.query(models.Shift).filter(
+        models.Shift.weekday == slot.weekday,
+        models.Shift.start_time == slot.start_time,
+        models.Shift.end_time == slot.end_time,
+    ).first()
+    if existing:
+        return existing
+    name = slot.name or f"Slot {slot.weekday} {slot.start_time.strftime('%H:%M')}-{slot.end_time.strftime('%H:%M')}"
+    shift = models.Shift(
+        name=name,
+        weekday=slot.weekday,
+        start_time=slot.start_time,
+        end_time=slot.end_time,
+        location=slot.location,
+    )
+    db.add(shift)
+    db.commit()
+    db.refresh(shift)
+    return shift
+
+
+@router.post("/slots/ensure", response_model=schemas.ShiftOut)
+def ensure_slot(slot: schemas.ShiftSlot, db: Session = Depends(get_db), current=Depends(require_role(models.UserRole.MEMBER))):
+    return _ensure_slot(db, slot)
+
+
+@router.post("/slots/assign", response_model=schemas.AssignmentOut)
+def assign_slot(payload: schemas.SlotAssign, db: Session = Depends(get_db), current=Depends(require_role(models.UserRole.OPERATOR))):
+    start_hour = max(0, min(23, payload.start_hour))
+    end_hour = payload.end_hour if payload.end_hour is not None else min(24, start_hour + 1)
+    if end_hour <= start_hour:
+        raise HTTPException(status_code=400, detail="Invalid hour range")
+
+    slot = schemas.ShiftSlot(
+        weekday=payload.weekday,
+        start_time=time_obj(hour=start_hour),
+        end_time=time_obj(hour=end_hour),
+        location=payload.location,
+    )
+    shift = _ensure_slot(db, slot)
+
+    assignment = models.UserShift(
+        user_id=payload.user_id,
+        shift_id=shift.id,
+        valid_from=payload.valid_from,
+        valid_to=payload.valid_to,
+    )
+    db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+    return assignment
 
 
 @router.post("/shifts", response_model=schemas.ShiftOut)

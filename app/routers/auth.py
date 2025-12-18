@@ -45,6 +45,13 @@ def change_password(payload: schemas.PasswordChange, db: Session = Depends(get_d
     return {"detail": "Password updated"}
 
 
+@router.post("/refresh", response_model=schemas.Token)
+def refresh_token(current_user: models.User = Depends(roles.get_current_user)):
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    token = security.create_access_token({"sub": str(current_user.id), "role": current_user.role.value}, access_token_expires)
+    return {"access_token": token, "token_type": "bearer"}
+
+
 @router.patch("/account", response_model=schemas.UserOut)
 def update_account(payload: schemas.AccountUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(roles.get_current_user)):
     account = current_user.auth_account

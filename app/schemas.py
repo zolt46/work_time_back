@@ -104,7 +104,8 @@ class RequestCreate(BaseModel):
     type: RequestType
     target_date: date
     target_shift_id: UUID  # 🔧 UUID
-    reason: Optional[str] = None
+    reason: str = Field(min_length=1)
+    user_id: UUID | None = None
 
 
 class RequestAction(BaseModel):
@@ -153,6 +154,24 @@ class ResetScope(str, enum.Enum):
 
 class ResetRequest(BaseModel):
     scope: ResetScope
+
+
+class ShiftSlot(BaseModel):
+    weekday: int
+    start_time: time
+    end_time: time
+    name: str | None = None
+    location: str | None = None
+
+
+class SlotAssign(BaseModel):
+    user_id: UUID
+    weekday: int
+    start_hour: int
+    end_hour: int | None = None
+    valid_from: date
+    valid_to: Optional[date] = None
+    location: str | None = None
 
 
 # Forward references

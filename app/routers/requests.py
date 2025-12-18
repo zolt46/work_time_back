@@ -12,7 +12,22 @@ router = APIRouter(prefix="/requests", tags=["requests"])
 
 @router.post("", response_model=schemas.RequestOut, status_code=status.HTTP_201_CREATED)
 def submit_request(payload: schemas.RequestCreate, current=Depends(require_role(models.UserRole.MEMBER)), db: Session = Depends(get_db)):
-    req = models.ShiftRequest(user_id=current.id, **payload.dict())
+    target_user_id = payload.user_id or current.id
+    target_user = db.query(models.User).filter(models.User.id == target_user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Target user not found")
+    if current.role == models.UserRole.OPERATOR and target_user.role == models.UserRole.MASTER:
+        raise HTTPException(status_code=403, detail="Operators cannot submit for masters")
+    if current.role == models.UserRole.MEMBER and target_user_id != current.id:
+        raise HTTPException(status_code=403, detail="Members can only submit for themselves")
+
+    req = models.ShiftRequest(
+        user_id=target_user_id,
+        type=payload.type,
+        target_date=payload.target_date,
+        target_shift_id=payload.target_shift_id,
+        reason=payload.reason,
+    )
     db.add(req)
     db.commit()
     db.refresh(req)
