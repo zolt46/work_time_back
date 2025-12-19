@@ -202,6 +202,20 @@ class SlotAssign(BaseModel):
     location: str | None = None
 
 
+class SlotRange(BaseModel):
+    weekday: int
+    start_hour: int
+    end_hour: int
+    location: str | None = None
+
+
+class SlotAssignBulk(BaseModel):
+    user_id: UUID
+    valid_from: date
+    valid_to: Optional[date] = None
+    slots: list[SlotRange]
+
+
 class ScheduleEvent(BaseModel):
     user_id: UUID
     user_name: str
