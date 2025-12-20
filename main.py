@@ -1,6 +1,6 @@
 # File: main.py  (work_time_back 레포 루트에 있는 그 main.py 기준)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -28,15 +28,23 @@ app.add_middleware(
 @app.middleware("http")
 async def add_fallback_cors(request, call_next):
     """
-    예외 등으로 FastAPI 기본 CORS 처리가 건너뛰더라도
-    최소한의 CORS 헤더를 보장해 브라우저에서 차단되지 않도록 한다.
+    예외 상황에도 CORS 헤더를 덧붙이되, HTTP 상태 코드는 그대로 유지한다.
     """
+    origin = request.headers.get("origin")
+    allow_all = "*" in settings.CORS_ALLOW_ORIGINS
+    allow_origin = "*"
+    if not allow_all and settings.CORS_ALLOW_ORIGINS:
+        if origin and origin in settings.CORS_ALLOW_ORIGINS:
+            allow_origin = origin
+        else:
+            allow_origin = settings.CORS_ALLOW_ORIGINS[0]
     try:
         response = await call_next(request)
+    except HTTPException as exc:  # 그대로 전달하되 헤더만 보강
+        response = JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=exc.headers)
     except Exception as exc:  # pragma: no cover - 런타임 방어
         response = JSONResponse({"detail": "internal_server_error"}, status_code=500)
-    origin_header = ",".join(settings.CORS_ALLOW_ORIGINS) if settings.CORS_ALLOW_ORIGINS else "*"
-    response.headers.setdefault("Access-Control-Allow-Origin", origin_header)
+    response.headers.setdefault("Access-Control-Allow-Origin", allow_origin if origin or allow_all else "*")
     response.headers.setdefault("Access-Control-Allow-Headers", "*")
     response.headers.setdefault("Access-Control-Allow-Methods", "*")
     if settings.CORS_ALLOW_CREDENTIALS:
