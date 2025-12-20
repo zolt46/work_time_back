@@ -50,18 +50,18 @@ def submit_request(payload: schemas.RequestCreate, current=Depends(require_role(
             raise HTTPException(status_code=404, detail="선택한 시간 슬롯 정보를 찾을 수 없습니다")
         _assert_same_weekday(payload.target_date, shift)
 
-        dup = (
+        dup_pending = (
             db.query(models.ShiftRequest)
             .filter(
                 models.ShiftRequest.user_id == target_user_id,
                 models.ShiftRequest.target_date == payload.target_date,
                 models.ShiftRequest.target_shift_id == sid,
-                models.ShiftRequest.status != models.RequestStatus.CANCELLED,
+                models.ShiftRequest.status == models.RequestStatus.PENDING,
             )
             .first()
         )
-        if dup:
-            raise HTTPException(status_code=409, detail="이미 동일한 시간에 신청된 건이 있습니다")
+        if dup_pending:
+            raise HTTPException(status_code=409, detail="이미 동일한 시간에 검토 중인 신청이 있습니다")
 
         key = (str(sid), payload.target_date)
         has_slot = key in effective_slots
@@ -95,10 +95,21 @@ def submit_request(payload: schemas.RequestCreate, current=Depends(require_role(
 
 
 @router.get("/my", response_model=list[schemas.RequestOut])
-def my_requests(current=Depends(require_role(models.UserRole.MEMBER)), db: Session = Depends(get_db)):
+def my_requests(
+    user_id: str | None = None,
+    current=Depends(require_role(models.UserRole.MEMBER)),
+    db: Session = Depends(get_db),
+):
+    target_id = user_id or str(current.id)
+    if current.role == models.UserRole.MEMBER and target_id != str(current.id):
+        raise HTTPException(status_code=403, detail="다른 사용자의 신청 내역을 조회할 수 없습니다")
+
+    target_user = db.query(models.User).filter(models.User.id == target_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="신청 대상 사용자를 찾을 수 없습니다")
     return (
         db.query(models.ShiftRequest)
-        .filter(models.ShiftRequest.user_id == current.id)
+        .filter(models.ShiftRequest.user_id == target_id)
         .order_by(models.ShiftRequest.created_at.desc())
         .all()
     )

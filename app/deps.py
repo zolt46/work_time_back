@@ -12,7 +12,7 @@ _request_status_enum_checked = False
 
 
 def _ensure_request_status_enum(db: Session) -> None:
-    """Ensure the request_status enum has all values used by the application."""
+    """Ensure the request_status enum is aligned with application constants."""
     global _request_status_enum_checked
     if _request_status_enum_checked:
         return
