@@ -15,7 +15,7 @@ ACTION_LABEL = {
     "REQUEST_APPROVE": "신청 승인",
     "REQUEST_REJECT": "신청 거절",
     "REQUEST_CANCEL": "신청 취소",
-    "ASSIGN_SLOT": "슬롯 배정",
+    "ASSIGN_SLOT": "근무 배정",
     "USER_CREATE": "사용자 생성",
     "USER_UPDATE": "사용자 수정",
     "CREDENTIAL_UPDATE": "자격 변경",
