@@ -105,8 +105,15 @@ class RequestCreate(BaseModel):
     target_date: date
     target_shift_id: UUID | None = None  # 🔧 UUID (단일 선택)
     target_shift_ids: list[UUID] | None = None  # 다중 슬롯 지원
+    target_ranges: list["RequestRange"] | None = None  # 부분 시간 지정
     reason: str = Field(min_length=1)
     user_id: UUID | None = None
+
+
+class RequestRange(BaseModel):
+    shift_id: UUID
+    start_hour: int | None = None
+    end_hour: int | None = None
 
 
 class RequestAction(BaseModel):
@@ -121,10 +128,13 @@ class RequestOut(BaseModel):
     type: RequestType
     target_date: date
     target_shift_id: UUID
+    target_start_time: time | None = None
+    target_end_time: time | None = None
     reason: Optional[str]
     status: RequestStatus
     operator_id: Optional[UUID]
     decided_at: Optional[datetime]
+    cancelled_after_approval: bool
     created_at: datetime
 
 
@@ -231,3 +241,4 @@ class ScheduleEvent(BaseModel):
 
 # Forward references
 UserOut.model_rebuild()
+RequestCreate.model_rebuild()
