@@ -165,8 +165,13 @@ def assign_slot(payload: schemas.SlotAssign, db: Session = Depends(get_db), curr
     return assignment
 
 
-def _delete_overlapping_assignments(db: Session, user_id: str, valid_from: date, valid_to: date | None) -> int:
-    query = db.query(models.UserShift).filter(models.UserShift.user_id == user_id)
+def _delete_overlapping_assignments(db: Session, user_id: str, shift_ids: set[str], valid_from: date, valid_to: date | None) -> int:
+    if not shift_ids:
+        return 0
+    query = db.query(models.UserShift).filter(
+        models.UserShift.user_id == user_id,
+        models.UserShift.shift_id.in_(shift_ids),
+    )
     query = query.filter(or_(models.UserShift.valid_to == None, models.UserShift.valid_to >= valid_from))
     if valid_to:
         query = query.filter(models.UserShift.valid_from <= valid_to)
@@ -209,18 +214,25 @@ def bulk_assign_slots(payload: schemas.SlotAssignBulk, db: Session = Depends(get
             )
         )
 
-    removed = _delete_overlapping_assignments(db, str(payload.user_id), payload.valid_from, payload.valid_to or payload.valid_from)
-    assignments: list[models.UserShift] = []
+    ensured_shifts: list[models.Shift] = []
     for slot in _merge_slots(normalized_slots):
-        shift = _ensure_slot(
-            db,
-            schemas.ShiftSlot(
-                weekday=slot.weekday,
-                start_time=time_obj(hour=slot.start_hour),
-                end_time=time_obj(hour=slot.end_hour),
-                location=slot.location,
-            ),
+        ensured_shifts.append(
+            _ensure_slot(
+                db,
+                schemas.ShiftSlot(
+                    weekday=slot.weekday,
+                    start_time=time_obj(hour=slot.start_hour),
+                    end_time=time_obj(hour=slot.end_hour),
+                    location=slot.location,
+                ),
+            )
         )
+
+    target_shift_ids = {str(s.id) for s in ensured_shifts}
+    removed = _delete_overlapping_assignments(db, str(payload.user_id), target_shift_ids, payload.valid_from, payload.valid_to or payload.valid_from)
+
+    assignments: list[models.UserShift] = []
+    for shift in ensured_shifts:
         assignment = models.UserShift(
             user_id=payload.user_id,
             shift_id=shift.id,
