@@ -165,13 +165,13 @@ def assign_slot(payload: schemas.SlotAssign, db: Session = Depends(get_db), curr
     return assignment
 
 
-def _delete_overlapping_assignments(db: Session, user_id: str, shift_ids: set[str], valid_from: date, valid_to: date | None) -> int:
-    if not shift_ids:
-        return 0
-    query = db.query(models.UserShift).filter(
-        models.UserShift.user_id == user_id,
-        models.UserShift.shift_id.in_(shift_ids),
-    )
+def _delete_overlapping_assignments(db: Session, user_id: str, valid_from: date, valid_to: date | None) -> int:
+    """사용자에 대한 기존 배정을 지정한 기간과 겹치는 구간까지 모두 제거합니다.
+
+    프론트엔드에서 선택한 슬롯 집합으로 배정을 완전히 덮어쓰기 위해,
+    동일한 기간에 유효한 기존 배정은 근무 종류와 관계없이 삭제합니다.
+    """
+    query = db.query(models.UserShift).filter(models.UserShift.user_id == user_id)
     query = query.filter(or_(models.UserShift.valid_to == None, models.UserShift.valid_to >= valid_from))
     if valid_to:
         query = query.filter(models.UserShift.valid_from <= valid_to)
@@ -228,8 +228,7 @@ def bulk_assign_slots(payload: schemas.SlotAssignBulk, db: Session = Depends(get
             )
         )
 
-    target_shift_ids = {str(s.id) for s in ensured_shifts}
-    removed = _delete_overlapping_assignments(db, str(payload.user_id), target_shift_ids, payload.valid_from, payload.valid_to)
+    removed = _delete_overlapping_assignments(db, str(payload.user_id), payload.valid_from, payload.valid_to)
 
     assignments: list[models.UserShift] = []
     for shift in ensured_shifts:
