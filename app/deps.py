@@ -62,7 +62,8 @@ def get_db() -> Generator[Session, None, None]:
                     ALTER TABLE IF EXISTS shift_requests
                         ADD COLUMN IF NOT EXISTS target_start_time TIME,
                         ADD COLUMN IF NOT EXISTS target_end_time TIME,
-                        ADD COLUMN IF NOT EXISTS cancelled_after_approval BOOLEAN NOT NULL DEFAULT FALSE;
+                        ADD COLUMN IF NOT EXISTS cancelled_after_approval BOOLEAN NOT NULL DEFAULT FALSE,
+                        ADD COLUMN IF NOT EXISTS cancel_reason TEXT;
                 END$$;
                 """
             )

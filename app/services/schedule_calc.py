@@ -74,11 +74,9 @@ def week_events(db: Session, start: date, user_filter: str | None = None) -> lis
             abs_end = abs_req.target_end_time or ev.end_time
             new_segments: list[schemas.ScheduleEvent] = []
             for seg in segments:
-                # no overlap
                 if abs_end <= seg.start_time or abs_start >= seg.end_time:
                     new_segments.append(seg)
                     continue
-                # split into remaining segments
                 if abs_start > seg.start_time:
                     new_segments.append(
                         schemas.ScheduleEvent(

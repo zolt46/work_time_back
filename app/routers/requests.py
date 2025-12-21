@@ -12,6 +12,20 @@ from ..services.schedule_calc import week_events
 router = APIRouter(prefix="/requests", tags=["requests"])
 
 
+def _time_window_from_range(start_hour: int | None, end_hour: int | None):
+    if start_hour is None or end_hour is None:
+        return None, None
+    if start_hour >= end_hour:
+        raise HTTPException(status_code=400, detail="시간 범위가 올바르지 않습니다")
+    return datetime.strptime(f"{start_hour:02d}:00", "%H:%M").time(), datetime.strptime(f"{end_hour:02d}:00", "%H:%M").time()
+
+
+def _overlaps(a_start, a_end, b_start, b_end):
+    if a_start is None or a_end is None or b_start is None or b_end is None:
+        return True
+    return a_start < b_end and b_start < a_end
+
+
 def _week_start(d):
     return d - timedelta(days=d.weekday())
 
@@ -50,8 +64,11 @@ def submit_request(payload: schemas.RequestCreate, current=Depends(require_role(
         raise HTTPException(status_code=403, detail="구성원은 본인 계정으로만 신청할 수 있습니다")
 
     shift_ids = payload.target_shift_ids or ([payload.target_shift_id] if payload.target_shift_id else [])
-    if not shift_ids:
-        raise HTTPException(status_code=400, detail="선택된 시간 슬롯이 없습니다")
+    ranges = payload.target_ranges or []
+    if not ranges and shift_ids:
+        ranges = [schemas.RequestRange(shift_id=sid) for sid in shift_ids]
+    if not ranges:
+        raise HTTPException(status_code=400, detail="선택된 시간 구간이 없습니다")
 
     # 현재 주간 일정(결재 반영 포함)을 로드하여 결근/추가 가능 여부 판단
     week_start = _week_start(payload.target_date)
@@ -59,13 +76,6 @@ def submit_request(payload: schemas.RequestCreate, current=Depends(require_role(
     effective_slots = {(str(ev.shift_id), ev.date): ev for ev in events}
 
     created_requests: list[models.ShiftRequest] = []
-    ranges = payload.target_ranges or []
-    if not ranges and shift_ids:
-        ranges = [schemas.RequestRange(shift_id=sid) for sid in shift_ids]
-
-    if not ranges:
-        raise HTTPException(status_code=400, detail="선택된 시간 구간이 없습니다")
-
     for r in ranges:
         sid = r.shift_id
         shift = db.query(models.Shift).filter(models.Shift.id == sid).first()
@@ -74,11 +84,10 @@ def submit_request(payload: schemas.RequestCreate, current=Depends(require_role(
         _assert_same_weekday(payload.target_date, shift)
 
         start_time, end_time = _time_window_from_range(r.start_hour, r.end_hour)
-        # 부분 결근의 경우 선택 시간이 슬롯 범위를 넘지 않도록 제한
         if payload.type == models.RequestType.ABSENCE and start_time and end_time:
             if start_time < shift.start_time or end_time > shift.end_time:
                 raise HTTPException(status_code=400, detail="선택 시간이 배정된 시간 범위를 벗어났습니다")
-        # 중복 검사 (시간 범위까지 고려)
+
         dup_query = db.query(models.ShiftRequest).filter(
             models.ShiftRequest.user_id == target_user_id,
             models.ShiftRequest.target_date == payload.target_date,
@@ -159,6 +168,16 @@ def pending_requests(db: Session = Depends(get_db), current=Depends(require_role
     )
 
 
+@router.get("/feed", response_model=list[schemas.RequestOut])
+def request_feed(db: Session = Depends(get_db), current=Depends(require_role(models.UserRole.OPERATOR))):
+    return (
+        db.query(models.ShiftRequest)
+        .order_by(models.ShiftRequest.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+
 @router.post("/{request_id}/cancel", response_model=schemas.RequestOut)
 def cancel_request(request_id: str, db: Session = Depends(get_db), current=Depends(require_role(models.UserRole.MEMBER))):
     req = db.query(models.ShiftRequest).filter(models.ShiftRequest.id == request_id).first()
@@ -169,9 +188,11 @@ def cancel_request(request_id: str, db: Session = Depends(get_db), current=Depen
     if req.status not in (models.RequestStatus.PENDING, models.RequestStatus.APPROVED):
         raise HTTPException(status_code=400, detail="대기 또는 승인된 건만 취소할 수 있습니다")
 
-    cancelled_after_approval = req.status == models.RequestStatus.APPROVED
+    was_approved = req.status == models.RequestStatus.APPROVED
     req.status = models.RequestStatus.CANCELLED
-    req.cancelled_after_approval = cancelled_after_approval
+    req.cancel_reason = "USER_CANCEL"
+    if was_approved:
+        req.cancelled_after_approval = True
     req.decided_at = datetime.utcnow()
     req.operator_id = current.id
     db.commit()
@@ -182,7 +203,7 @@ def cancel_request(request_id: str, db: Session = Depends(get_db), current=Depen
         action="REQUEST_CANCEL",
         target_user_id=str(req.user_id),
         request_id=str(req.id),
-        details={"type": req.type.value, "cancelled_after_approval": cancelled_after_approval},
+        details={"type": req.type.value, "cancel_reason": req.cancel_reason, "cancelled_after_approval": req.cancelled_after_approval},
     )
     db.commit()
     return req
@@ -219,11 +240,10 @@ def reject_request(request_id: str, db: Session = Depends(get_db), current=Depen
     req = db.query(models.ShiftRequest).filter(models.ShiftRequest.id == request_id).first()
     if not req:
         raise HTTPException(status_code=404, detail="신청 건을 찾을 수 없습니다")
-    if req.status == models.RequestStatus.CANCELLED:
-        raise HTTPException(status_code=400, detail="취소된 신청은 거절할 수 없습니다")
-    if req.status == models.RequestStatus.REJECTED:
-        raise HTTPException(status_code=400, detail="이미 거절된 신청입니다")
-    req.status = models.RequestStatus.CANCELLED
+    if req.status in (models.RequestStatus.CANCELLED, models.RequestStatus.REJECTED):
+        raise HTTPException(status_code=400, detail="이미 처리된 신청입니다")
+    req.status = models.RequestStatus.REJECTED
+    req.cancel_reason = "REJECTED"
     req.operator_id = current.id
     req.decided_at = datetime.utcnow()
     db.commit()

@@ -188,6 +188,7 @@ class ShiftRequest(Base):
     )
     decided_at = Column(DateTime(timezone=True))
     cancelled_after_approval = Column(Boolean, nullable=False, default=False)
+    cancel_reason = Column(String)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

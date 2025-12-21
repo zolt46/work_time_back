@@ -105,7 +105,7 @@ class RequestCreate(BaseModel):
     target_date: date
     target_shift_id: UUID | None = None  # 🔧 UUID (단일 선택)
     target_shift_ids: list[UUID] | None = None  # 다중 슬롯 지원
-    target_ranges: list["RequestRange"] | None = None  # 부분 시간 지정
+    target_ranges: list["RequestRange"] | None = None  # 부분 시간 선택
     reason: str = Field(min_length=1)
     user_id: UUID | None = None
 
@@ -135,6 +135,7 @@ class RequestOut(BaseModel):
     operator_id: Optional[UUID]
     decided_at: Optional[datetime]
     cancelled_after_approval: bool
+    cancel_reason: Optional[str]
     created_at: datetime
 
 
