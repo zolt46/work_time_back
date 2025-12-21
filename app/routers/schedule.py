@@ -229,7 +229,7 @@ def bulk_assign_slots(payload: schemas.SlotAssignBulk, db: Session = Depends(get
         )
 
     target_shift_ids = {str(s.id) for s in ensured_shifts}
-    removed = _delete_overlapping_assignments(db, str(payload.user_id), target_shift_ids, payload.valid_from, payload.valid_to or payload.valid_from)
+    removed = _delete_overlapping_assignments(db, str(payload.user_id), target_shift_ids, payload.valid_from, payload.valid_to)
 
     assignments: list[models.UserShift] = []
     for shift in ensured_shifts:
@@ -237,7 +237,7 @@ def bulk_assign_slots(payload: schemas.SlotAssignBulk, db: Session = Depends(get
             user_id=payload.user_id,
             shift_id=shift.id,
             valid_from=payload.valid_from,
-            valid_to=payload.valid_to or payload.valid_from,
+            valid_to=payload.valid_to,
         )
         db.add(assignment)
         assignments.append(assignment)
@@ -251,7 +251,7 @@ def bulk_assign_slots(payload: schemas.SlotAssignBulk, db: Session = Depends(get
         target_user_id=str(payload.user_id),
         details={
             "valid_from": payload.valid_from.isoformat(),
-            "valid_to": (payload.valid_to or payload.valid_from).isoformat(),
+            "valid_to": payload.valid_to.isoformat() if payload.valid_to else None,
             "slots": [
                 {"weekday": slot.weekday, "start_hour": slot.start_hour, "end_hour": slot.end_hour, "location": slot.location}
                 for slot in normalized_slots
