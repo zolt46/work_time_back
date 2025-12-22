@@ -237,6 +237,8 @@ class ScheduleEvent(BaseModel):
     shift_id: UUID
     shift_name: str
     location: str | None = None
+    valid_from: Optional[date] = None
+    valid_to: Optional[date] = None
     source: str = "BASE"  # BASE, EXTRA, ABSENCE
 
 

@@ -54,6 +54,8 @@ def week_events(db: Session, start: date, user_filter: str | None = None) -> lis
                     shift_id=a.shift_id,
                     shift_name=a.shift.name,
                     location=a.shift.location,
+                    valid_from=a.valid_from,
+                    valid_to=a.valid_to,
                     source="BASE",
                 )
             )
@@ -132,6 +134,8 @@ def week_events(db: Session, start: date, user_filter: str | None = None) -> lis
                 shift_id=shift.id,
                 shift_name=shift.name,
                 location=shift.location,
+                valid_from=None,
+                valid_to=None,
                 source="EXTRA",
             )
         )
