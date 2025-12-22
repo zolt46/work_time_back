@@ -92,11 +92,11 @@ def submit_request(payload: schemas.RequestCreate, current=Depends(require_role(
             models.ShiftRequest.user_id == target_user_id,
             models.ShiftRequest.target_date == payload.target_date,
             models.ShiftRequest.target_shift_id == sid,
-            models.ShiftRequest.status != models.RequestStatus.CANCELLED,
+            models.ShiftRequest.status == models.RequestStatus.PENDING,
         )
         for dup in dup_query:
             if _overlaps(start_time, end_time, dup.target_start_time, dup.target_end_time):
-                raise HTTPException(status_code=409, detail="이미 동일한 시간에 신청된 건이 있습니다")
+                raise HTTPException(status_code=409, detail="이미 동일한 시간에 대기 중인 신청이 있습니다")
 
         key = (str(sid), payload.target_date)
         has_slot = key in effective_slots
