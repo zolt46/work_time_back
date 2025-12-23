@@ -25,7 +25,7 @@ ACTION_LABEL = {
 
 
 @router.get("", response_model=list[schemas.HistoryEntry])
-def history_logs(db: Session = Depends(get_db), current=Depends(require_role(models.UserRole.MEMBER))):
+def history_logs(db: Session = Depends(get_db), current=Depends(require_role(models.UserRole.MASTER))):
     cutoff = datetime.utcnow() - timedelta(days=30)
     query = db.query(models.AuditLog).filter(models.AuditLog.created_at >= cutoff)
     if current.role == models.UserRole.MEMBER:
