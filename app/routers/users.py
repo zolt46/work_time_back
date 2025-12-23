@@ -1,5 +1,6 @@
 # File: /backend/app/routers/users.py
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
 from .. import schemas, models
@@ -19,7 +20,12 @@ def _visible_users_query(db: Session, current: models.User):
     if current.role == models.UserRole.MASTER:
         return query
     if current.role == models.UserRole.OPERATOR:
-        return query.filter(models.User.role != models.UserRole.MASTER)
+        return query.filter(
+            or_(
+                models.User.role == models.UserRole.MEMBER,
+                models.User.id == current.id,
+            )
+        )
     return query.filter(models.User.id == current.id)
 
 
