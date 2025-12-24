@@ -9,7 +9,7 @@ from .. import schemas, models
 from ..deps import get_db
 from ..core.roles import require_role, get_current_user
 from ..core.audit import record_log
-from ..services.schedule_calc import week_events
+from ..services.schedule_calc import week_events, week_base_events
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
@@ -105,6 +105,14 @@ def weekly_view(start: date, user_id: str | None = None, db: Session = Depends(g
         raise HTTPException(status_code=403, detail="다른 사용자의 일정은 조회할 수 없습니다")
     target_user = user_id if user_id else None
     return week_events(db, start, target_user)
+
+
+@router.get("/weekly_base", response_model=list[schemas.ScheduleEvent])
+def weekly_base(start: date, user_id: str | None = None, db: Session = Depends(get_db), current=Depends(require_role(models.UserRole.MEMBER))):
+    if current.role == models.UserRole.MEMBER and user_id and user_id != str(current.id):
+        raise HTTPException(status_code=403, detail="다른 사용자의 일정은 조회할 수 없습니다")
+    target_user = user_id if user_id else None
+    return week_base_events(db, start, target_user)
 
 
 @router.post("/slots/assign", response_model=schemas.AssignmentOut)

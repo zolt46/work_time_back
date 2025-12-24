@@ -141,3 +141,38 @@ def week_events(db: Session, start: date, user_filter: str | None = None) -> lis
         )
 
     return filtered_events + extras
+
+
+def week_base_events(db: Session, start: date, user_filter: str | None = None) -> list[schemas.ScheduleEvent]:
+    """고정 배정만 반영한 주간 이벤트를 계산."""
+    assignments = db.query(models.UserShift).join(models.Shift).join(models.User)
+    if user_filter:
+        assignments = assignments.filter(models.UserShift.user_id == user_filter)
+    assignments = assignments.all()
+
+    base_events: list[schemas.ScheduleEvent] = []
+    for offset in range(7):
+        current_date = start + timedelta(days=offset)
+        weekday = current_date.weekday()
+        for a in assignments:
+            if not _valid_for_date(a, current_date):
+                continue
+            if a.shift.weekday != weekday:
+                continue
+            base_events.append(
+                schemas.ScheduleEvent(
+                    user_id=a.user_id,
+                    user_name=a.user.name,
+                    role=a.user.role,
+                    date=current_date,
+                    start_time=a.shift.start_time,
+                    end_time=a.shift.end_time,
+                    shift_id=a.shift_id,
+                    shift_name=a.shift.name,
+                    location=a.shift.location,
+                    valid_from=a.valid_from,
+                    valid_to=a.valid_to,
+                    source="BASE",
+                )
+            )
+    return base_events
