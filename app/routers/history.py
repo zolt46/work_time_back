@@ -21,6 +21,9 @@ ACTION_LABEL = {
     "CREDENTIAL_UPDATE": "자격 변경",
     "USER_DELETE": "사용자 삭제",
     "RESET_DATA": "데이터 초기화",
+    "NOTICE_CREATE": "공지 생성",
+    "NOTICE_UPDATE": "공지 수정",
+    "NOTICE_DELETE": "공지 삭제",
 }
 
 

@@ -39,6 +39,25 @@ class RequestStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class NoticeType(str, enum.Enum):
+    DB_MAINTENANCE = "DB_MAINTENANCE"
+    SYSTEM_MAINTENANCE = "SYSTEM_MAINTENANCE"
+    WORK_SPECIAL = "WORK_SPECIAL"
+    GENERAL = "GENERAL"
+
+
+class NoticeChannel(str, enum.Enum):
+    POPUP = "POPUP"
+    BANNER = "BANNER"
+    BOARD = "BOARD"
+
+
+class NoticeScope(str, enum.Enum):
+    ALL = "ALL"
+    ROLE = "ROLE"
+    USER = "USER"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -235,3 +254,82 @@ class AuditLog(Base):
         nullable=False,
         default=datetime.utcnow,
     )
+
+
+class Notice(Base):
+    __tablename__ = "notices"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    title = Column(String, nullable=False)
+    body = Column(String, nullable=False)
+    type = Column(Enum(NoticeType), nullable=False)
+    channel = Column(Enum(NoticeChannel), nullable=False)
+    scope = Column(Enum(NoticeScope), nullable=False, default=NoticeScope.ALL)
+    target_roles = Column(JSON)
+    priority = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=True)
+    start_at = Column(DateTime(timezone=True))
+    end_at = Column(DateTime(timezone=True))
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    creator = relationship("User")
+    targets = relationship("NoticeTarget", back_populates="notice", cascade="all, delete-orphan")
+    reads = relationship("NoticeRead", back_populates="notice", cascade="all, delete-orphan")
+
+
+class NoticeTarget(Base):
+    __tablename__ = "notice_targets"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    notice_id = Column(UUID(as_uuid=True), ForeignKey("notices.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    notice = relationship("Notice", back_populates="targets")
+    user = relationship("User")
+
+
+class NoticeRead(Base):
+    __tablename__ = "notice_reads"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    notice_id = Column(UUID(as_uuid=True), ForeignKey("notices.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    channel = Column(Enum(NoticeChannel), nullable=False)
+    read_at = Column(DateTime(timezone=True))
+    dismissed_at = Column(DateTime(timezone=True))
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    notice = relationship("Notice", back_populates="reads")
+    user = relationship("User")

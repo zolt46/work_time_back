@@ -5,7 +5,7 @@ from typing import Optional, List
 from uuid import UUID  # ✅ UUID 타입 추가
 
 from pydantic import BaseModel, Field, ConfigDict
-from .models import UserRole, RequestType, RequestStatus
+from .models import UserRole, RequestType, RequestStatus, NoticeType, NoticeChannel, NoticeScope
 
 
 class Token(BaseModel):
@@ -193,6 +193,67 @@ class ResetScope(str, enum.Enum):
 
 class ResetRequest(BaseModel):
     scope: ResetScope
+
+
+class NoticeBase(BaseModel):
+    title: str
+    body: str
+    type: NoticeType
+    channel: NoticeChannel
+    scope: NoticeScope = NoticeScope.ALL
+    target_roles: list[UserRole] | None = None
+    target_user_ids: list[UUID] | None = None
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    priority: int = 0
+    is_active: bool = True
+
+
+class NoticeCreate(NoticeBase):
+    pass
+
+
+class NoticeUpdate(BaseModel):
+    title: str | None = None
+    body: str | None = None
+    type: NoticeType | None = None
+    channel: NoticeChannel | None = None
+    scope: NoticeScope | None = None
+    target_roles: list[UserRole] | None = None
+    target_user_ids: list[UUID] | None = None
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    priority: int | None = None
+    is_active: bool | None = None
+
+
+class NoticeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    title: str
+    body: str
+    type: NoticeType
+    channel: NoticeChannel
+    scope: NoticeScope
+    target_roles: list[UserRole] | None = None
+    target_user_ids: list[UUID] | None = None
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    priority: int
+    is_active: bool
+    created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class NoticeListItem(NoticeOut):
+    read_at: datetime | None = None
+    dismissed_at: datetime | None = None
+
+
+class NoticeReadAction(BaseModel):
+    channel: NoticeChannel
 
 
 class ShiftSlot(BaseModel):
