@@ -1,17 +1,20 @@
 # File: main.py  (work_time_back 레포 루트에 있는 그 main.py 기준)
 
+import os
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import models
 from app.config import get_settings
-from app.deps import engine
+from app.deps import engine, initialize_database
 from app.routers import admin, auth, requests, schedule, users, history
 from app.routers import system
 
 settings = get_settings()
-models.Base.metadata.create_all(bind=engine)
+if os.getenv("APP_ENV", "").lower() in {"local", "development", "dev"}:
+    models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
@@ -58,6 +61,11 @@ app.include_router(requests.router)
 app.include_router(admin.router)
 app.include_router(system.router)
 app.include_router(history.router)
+
+
+@app.on_event("startup")
+def warmup_database() -> None:
+    initialize_database()
 
 
 @app.get("/")
