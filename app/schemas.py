@@ -243,6 +243,7 @@ class NoticeOut(BaseModel):
     priority: int
     is_active: bool
     created_by: UUID
+    creator_role: UserRole | None = None
     created_at: datetime
     updated_at: datetime
 

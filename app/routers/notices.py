@@ -27,6 +27,11 @@ def _assert_notice_permission(current: models.User, notice_type: models.NoticeTy
     order = {models.UserRole.MEMBER: 1, models.UserRole.OPERATOR: 2, models.UserRole.MASTER: 3}
     if order[current.role] < order[required]:
         raise HTTPException(status_code=403, detail="Insufficient permissions for notice type")
+    if current.role == models.UserRole.OPERATOR and notice_type not in (
+        models.NoticeType.WORK_SPECIAL,
+        models.NoticeType.GENERAL,
+    ):
+        raise HTTPException(status_code=403, detail="Operators can only create work or general notices")
 
 
 def _validate_targets(
@@ -92,6 +97,7 @@ def _notice_to_schema(notice: models.Notice, read: models.NoticeRead | None) -> 
         priority=notice.priority,
         is_active=notice.is_active,
         created_by=notice.created_by,
+        creator_role=notice.creator.role if notice.creator else None,
         created_at=notice.created_at,
         updated_at=notice.updated_at,
         read_at=read.read_at if read else None,
@@ -109,8 +115,14 @@ def list_notices(
     current: models.User = Depends(get_current_user),
 ):
     query = db.query(models.Notice)
-    if channel:
-        query = query.filter(models.Notice.channel == channel)
+    if channel == models.NoticeChannel.POPUP:
+        query = query.filter(models.Notice.channel.in_([models.NoticeChannel.POPUP, models.NoticeChannel.POPUP_BANNER]))
+    elif channel == models.NoticeChannel.BANNER:
+        query = query.filter(models.Notice.channel.in_([models.NoticeChannel.BANNER, models.NoticeChannel.POPUP_BANNER]))
+    elif channel == models.NoticeChannel.NONE:
+        query = query.filter(models.Notice.channel == models.NoticeChannel.NONE)
+    elif channel == models.NoticeChannel.BOARD:
+        channel = models.NoticeChannel.BOARD
     if include_inactive or include_all:
         if current.role not in (models.UserRole.MASTER, models.UserRole.OPERATOR):
             raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -120,19 +132,31 @@ def list_notices(
         query = _apply_scope_filter(query, current)
 
     read_alias = models.NoticeRead
+    read_channel = channel if channel in (
+        models.NoticeChannel.POPUP,
+        models.NoticeChannel.BANNER,
+        models.NoticeChannel.BOARD,
+    ) else None
+    channel_match = read_alias.channel == (read_channel or models.Notice.channel)
     query = query.outerjoin(
         read_alias,
         and_(
             read_alias.notice_id == models.Notice.id,
             read_alias.user_id == current.id,
-            read_alias.channel == models.Notice.channel,
+            channel_match,
         ),
     )
 
-    if unread_only is None and channel in (models.NoticeChannel.POPUP, models.NoticeChannel.BANNER):
+    if unread_only is None and channel == models.NoticeChannel.POPUP:
         unread_only = True
+    if channel == models.NoticeChannel.BANNER:
+        unread_only = False
     if unread_only:
-        query = query.filter(read_alias.dismissed_at.is_(None))
+        if channel == models.NoticeChannel.POPUP:
+            cutoff = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            query = query.filter(or_(read_alias.dismissed_at.is_(None), read_alias.dismissed_at < cutoff))
+        else:
+            query = query.filter(read_alias.dismissed_at.is_(None))
 
     notices = query.order_by(models.Notice.priority.desc(), models.Notice.created_at.desc()).limit(200).all()
     items: list[schemas.NoticeListItem] = []
@@ -175,6 +199,7 @@ def get_notice(
         priority=notice.priority,
         is_active=notice.is_active,
         created_by=notice.created_by,
+        creator_role=notice.creator.role if notice.creator else None,
         created_at=notice.created_at,
         updated_at=notice.updated_at,
     )
@@ -232,6 +257,7 @@ def create_notice(
         priority=notice.priority,
         is_active=notice.is_active,
         created_by=notice.created_by,
+        creator_role=notice.creator.role if notice.creator else None,
         created_at=notice.created_at,
         updated_at=notice.updated_at,
     )
@@ -247,6 +273,8 @@ def update_notice(
     notice = db.query(models.Notice).filter(models.Notice.id == notice_id).first()
     if not notice:
         raise HTTPException(status_code=404, detail="notice_not_found")
+    if current.role == models.UserRole.OPERATOR and notice.creator and notice.creator.role == models.UserRole.MASTER:
+        raise HTTPException(status_code=403, detail="Only master can edit master notices")
 
     new_type = payload.type or notice.type
     _assert_notice_permission(current, new_type)
@@ -303,6 +331,7 @@ def update_notice(
         priority=notice.priority,
         is_active=notice.is_active,
         created_by=notice.created_by,
+        creator_role=notice.creator.role if notice.creator else None,
         created_at=notice.created_at,
         updated_at=notice.updated_at,
     )
@@ -317,6 +346,8 @@ def delete_notice(
     notice = db.query(models.Notice).filter(models.Notice.id == notice_id).first()
     if not notice:
         raise HTTPException(status_code=404, detail="notice_not_found")
+    if current.role == models.UserRole.OPERATOR and notice.creator and notice.creator.role == models.UserRole.MASTER:
+        raise HTTPException(status_code=403, detail="Only master can delete master notices")
     record_log(
         db,
         actor_id=str(current.id),

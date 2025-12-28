@@ -49,6 +49,8 @@ class NoticeType(str, enum.Enum):
 class NoticeChannel(str, enum.Enum):
     POPUP = "POPUP"
     BANNER = "BANNER"
+    POPUP_BANNER = "POPUP_BANNER"
+    NONE = "NONE"
     BOARD = "BOARD"
 
 
