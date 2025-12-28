@@ -128,7 +128,8 @@ def list_notices(
             raise HTTPException(status_code=403, detail="Insufficient permissions")
     if not include_inactive:
         query = _apply_active_filter(query)
-    if not include_all:
+    apply_scope = channel != models.NoticeChannel.BOARD
+    if not include_all and apply_scope:
         query = _apply_scope_filter(query, current)
 
     read_alias = models.NoticeRead
