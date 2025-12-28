@@ -147,16 +147,13 @@ def list_notices(
         ),
     )
 
-    if unread_only is None and channel == models.NoticeChannel.POPUP:
-        unread_only = True
-    if channel == models.NoticeChannel.BANNER:
+    if channel == models.NoticeChannel.POPUP:
+        cutoff = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        query = query.filter(or_(read_alias.dismissed_at.is_(None), read_alias.dismissed_at < cutoff))
+    elif channel == models.NoticeChannel.BANNER:
         unread_only = False
     if unread_only:
-        if channel == models.NoticeChannel.POPUP:
-            cutoff = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            query = query.filter(or_(read_alias.dismissed_at.is_(None), read_alias.dismissed_at < cutoff))
-        else:
-            query = query.filter(read_alias.dismissed_at.is_(None))
+        query = query.filter(read_alias.dismissed_at.is_(None))
 
     notices = query.order_by(models.Notice.priority.desc(), models.Notice.created_at.desc()).limit(200).all()
     items: list[schemas.NoticeListItem] = []
