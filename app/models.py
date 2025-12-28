@@ -15,7 +15,7 @@ from sqlalchemy import (
     text,
     Integer,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -269,7 +269,7 @@ class Notice(Base):
     type = Column(Enum(NoticeType), nullable=False)
     channel = Column(Enum(NoticeChannel), nullable=False)
     scope = Column(Enum(NoticeScope), nullable=False, default=NoticeScope.ALL)
-    target_roles = Column(JSON)
+    target_roles = Column(JSONB)
     priority = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, nullable=False, default=True)
     start_at = Column(DateTime(timezone=True))

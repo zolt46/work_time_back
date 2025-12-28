@@ -58,6 +58,7 @@ def _apply_scope_filter(query, current: models.User):
             models.Notice.scope == models.NoticeScope.ALL,
             and_(
                 models.Notice.scope == models.NoticeScope.ROLE,
+                models.Notice.target_roles.isnot(None),
                 models.Notice.target_roles.contains([current.role.value]),
             ),
             and_(models.Notice.scope == models.NoticeScope.USER, user_match),
