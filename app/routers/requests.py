@@ -168,14 +168,49 @@ def pending_requests(db: Session = Depends(get_db), current=Depends(require_role
     )
 
 
-@router.get("/feed", response_model=list[schemas.RequestOut])
+@router.get("/feed", response_model=list[schemas.RequestFeedEntry])
 def request_feed(db: Session = Depends(get_db), current=Depends(require_role(models.UserRole.OPERATOR))):
-    return (
-        db.query(models.ShiftRequest)
-        .order_by(models.ShiftRequest.created_at.desc())
+    logs = (
+        db.query(models.AuditLog)
+        .filter(models.AuditLog.action_type.in_(
+            ["REQUEST_SUBMIT", "REQUEST_APPROVE", "REQUEST_REJECT", "REQUEST_CANCEL"]
+        ))
+        .filter(models.AuditLog.request_id.isnot(None))
+        .order_by(models.AuditLog.created_at.desc())
         .limit(50)
         .all()
     )
+    if not logs:
+        return []
+    request_ids = [log.request_id for log in logs if log.request_id]
+    requests = (
+        db.query(models.ShiftRequest)
+        .filter(models.ShiftRequest.id.in_(request_ids))
+        .all()
+    )
+    request_map = {req.id: req for req in requests}
+    entries: list[schemas.RequestFeedEntry] = []
+    for log in logs:
+        req = request_map.get(log.request_id)
+        if not req:
+            continue
+        entries.append(
+            schemas.RequestFeedEntry(
+                request_id=req.id,
+                action_type=log.action_type,
+                created_at=log.created_at,
+                user_id=req.user_id,
+                type=req.type,
+                target_date=req.target_date,
+                target_shift_id=req.target_shift_id,
+                target_start_time=req.target_start_time,
+                target_end_time=req.target_end_time,
+                reason=req.reason,
+                cancelled_after_approval=req.cancelled_after_approval,
+                cancel_reason=req.cancel_reason,
+            )
+        )
+    return entries
 
 
 @router.post("/{request_id}/cancel", response_model=schemas.RequestOut)

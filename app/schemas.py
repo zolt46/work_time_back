@@ -139,6 +139,23 @@ class RequestOut(BaseModel):
     created_at: datetime
 
 
+class RequestFeedEntry(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    request_id: UUID
+    action_type: str
+    created_at: datetime
+    user_id: UUID
+    type: RequestType
+    target_date: date
+    target_shift_id: UUID
+    target_start_time: time | None = None
+    target_end_time: time | None = None
+    reason: Optional[str]
+    cancelled_after_approval: bool = False
+    cancel_reason: Optional[str]
+
+
 class RequestLogOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
