@@ -5,7 +5,7 @@ from typing import Optional, List
 from uuid import UUID  # ✅ UUID 타입 추가
 
 from pydantic import BaseModel, Field, ConfigDict
-from .models import UserRole, RequestType, RequestStatus, NoticeType, NoticeChannel, NoticeScope
+from .models import UserRole, RequestType, RequestStatus, NoticeType, NoticeChannel, NoticeScope, VisitorPeriodType
 
 
 class Token(BaseModel):
@@ -319,6 +319,118 @@ class ScheduleEvent(BaseModel):
     valid_from: Optional[date] = None
     valid_to: Optional[date] = None
     source: str = "BASE"  # BASE, EXTRA, ABSENCE
+
+
+class VisitorYearBase(BaseModel):
+    academic_year: int
+    label: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    initial_total: int = 0
+
+
+class VisitorYearCreate(VisitorYearBase):
+    pass
+
+
+class VisitorYearUpdate(BaseModel):
+    label: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    initial_total: int | None = None
+
+
+class VisitorYearOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    academic_year: int
+    label: str
+    start_date: date
+    end_date: date
+    initial_total: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class VisitorPeriodBase(BaseModel):
+    period_type: VisitorPeriodType
+    name: str
+    start_date: date | None = None
+    end_date: date | None = None
+
+
+class VisitorPeriodUpsert(VisitorPeriodBase):
+    pass
+
+
+class VisitorPeriodOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    school_year_id: UUID
+    period_type: VisitorPeriodType
+    name: str
+    start_date: date | None = None
+    end_date: date | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class VisitorEntryCreate(BaseModel):
+    visit_date: date
+    count1: int = 0
+    count2: int = 0
+
+
+class VisitorEntryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    school_year_id: UUID
+    visit_date: date
+    count1: int
+    count2: int
+    total_count: int
+    previous_total: int
+    daily_visitors: int
+    created_by: UUID | None = None
+    updated_by: UUID | None = None
+    created_by_name: str | None = None
+    updated_by_name: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class VisitorMonthlyStat(BaseModel):
+    year: int
+    month: int
+    label: str
+    open_days: int
+    total_visitors: int
+
+
+class VisitorPeriodStat(BaseModel):
+    period_type: VisitorPeriodType
+    name: str
+    start_date: date | None = None
+    end_date: date | None = None
+    open_days: int
+    total_visitors: int
+
+
+class VisitorSummary(BaseModel):
+    total_visitors: int
+    open_days: int
+    monthly: list[VisitorMonthlyStat]
+    periods: list[VisitorPeriodStat]
+
+
+class VisitorYearDetail(BaseModel):
+    year: VisitorYearOut
+    periods: list[VisitorPeriodOut]
+    entries: list[VisitorEntryOut]
+    summary: VisitorSummary
 
 
 # Forward references

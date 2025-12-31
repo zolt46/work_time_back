@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import models
 from app.config import get_settings
 from app.deps import engine, initialize_database
-from app.routers import admin, auth, requests, schedule, users, history, notices
+from app.routers import admin, auth, requests, schedule, users, history, notices, visitors
 from app.routers import system
 
 settings = get_settings()
@@ -62,6 +62,7 @@ app.include_router(admin.router)
 app.include_router(system.router)
 app.include_router(history.router)
 app.include_router(notices.router)
+app.include_router(visitors.router)
 
 
 @app.on_event("startup")
