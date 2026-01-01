@@ -413,6 +413,8 @@ class VisitorDailyCount(Base):
     visit_date = Column(Date, nullable=False)
     count1 = Column(Integer, nullable=False, default=0)
     count2 = Column(Integer, nullable=False, default=0)
+    baseline_total = Column(Integer)
+    daily_override = Column(Integer)
     total_count = Column(Integer, nullable=False, default=0)
     previous_total = Column(Integer, nullable=False, default=0)
     daily_visitors = Column(Integer, nullable=False, default=0)

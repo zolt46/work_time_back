@@ -48,12 +48,49 @@ def _recalculate_entries(db: Session, year: models.VisitorSchoolYear) -> None:
         .order_by(models.VisitorDailyCount.visit_date.asc())
         .all()
     )
-    prev_total = year.initial_total or 0
-    for entry in entries:
+    if not entries:
+        return
+
+    anchor_index = next(
+        (index for index, entry in enumerate(entries) if entry.baseline_total is not None),
+        0,
+    )
+
+    def apply_entry(entry: models.VisitorDailyCount, previous_total: int) -> None:
         entry.total_count = (entry.count1 or 0) + (entry.count2 or 0)
-        entry.previous_total = prev_total
-        entry.daily_visitors = entry.total_count - entry.previous_total
-        prev_total = entry.total_count
+        entry.previous_total = previous_total
+        entry.daily_visitors = (
+            entry.daily_override
+            if entry.daily_override is not None
+            else entry.total_count - entry.previous_total
+        )
+
+    anchor_entry = entries[anchor_index]
+    anchor_prev_total = anchor_entry.baseline_total
+    if anchor_prev_total is None:
+        anchor_prev_total = year.initial_total or 0
+    apply_entry(anchor_entry, anchor_prev_total)
+
+    for index in range(anchor_index + 1, len(entries)):
+        entry = entries[index]
+        prev_total = entries[index - 1].total_count
+        if entry.baseline_total is not None:
+            prev_total = entry.baseline_total
+        apply_entry(entry, prev_total)
+
+    for index in range(anchor_index - 1, -1, -1):
+        entry = entries[index]
+        next_entry = entries[index + 1]
+        total = (entry.count1 or 0) + (entry.count2 or 0)
+        if total == 0 and next_entry.previous_total is not None:
+            total = next_entry.previous_total
+        entry.total_count = total
+        if entry.daily_override is not None:
+            entry.previous_total = total - entry.daily_override
+            entry.daily_visitors = entry.daily_override
+        else:
+            entry.previous_total = total
+            entry.daily_visitors = 0
     db.flush()
 
 
@@ -190,6 +227,8 @@ def get_year_detail(year_id, db: Session = Depends(get_db), current_user=Depends
                 visit_date=entry.visit_date,
                 count1=entry.count1,
                 count2=entry.count2,
+                baseline_total=entry.baseline_total,
+                daily_override=entry.daily_override,
                 total_count=entry.total_count,
                 previous_total=entry.previous_total,
                 daily_visitors=entry.daily_visitors,
@@ -277,6 +316,8 @@ def upsert_entry(year_id, payload: schemas.VisitorEntryCreate, db: Session = Dep
     if entry:
         entry.count1 = payload.count1
         entry.count2 = payload.count2
+        entry.baseline_total = payload.baseline_total
+        entry.daily_override = payload.daily_override
         entry.updated_by = current_user.id
     else:
         entry = models.VisitorDailyCount(
@@ -284,6 +325,8 @@ def upsert_entry(year_id, payload: schemas.VisitorEntryCreate, db: Session = Dep
             visit_date=payload.visit_date,
             count1=payload.count1,
             count2=payload.count2,
+            baseline_total=payload.baseline_total,
+            daily_override=payload.daily_override,
             created_by=current_user.id,
             updated_by=current_user.id,
         )
@@ -298,6 +341,8 @@ def upsert_entry(year_id, payload: schemas.VisitorEntryCreate, db: Session = Dep
         visit_date=entry.visit_date,
         count1=entry.count1,
         count2=entry.count2,
+        baseline_total=entry.baseline_total,
+        daily_override=entry.daily_override,
         total_count=entry.total_count,
         previous_total=entry.previous_total,
         daily_visitors=entry.daily_visitors,

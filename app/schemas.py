@@ -381,6 +381,8 @@ class VisitorEntryCreate(BaseModel):
     visit_date: date
     count1: int = 0
     count2: int = 0
+    baseline_total: int | None = None
+    daily_override: int | None = None
 
 
 class VisitorEntryOut(BaseModel):
@@ -391,6 +393,8 @@ class VisitorEntryOut(BaseModel):
     visit_date: date
     count1: int
     count2: int
+    baseline_total: int | None = None
+    daily_override: int | None = None
     total_count: int
     previous_total: int
     daily_visitors: int
