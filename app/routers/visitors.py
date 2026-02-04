@@ -107,6 +107,7 @@ def _recalculate_entries(db: Session, year: models.VisitorSchoolYear) -> None:
             entry.daily_visitors = entry.total_count - entry.previous_total
         else:
             entry.daily_visitors = 0
+        ensure_baseline(entry)
 
     anchor_entry = entries[anchor_index]
     anchor_prev_total = anchor_entry.baseline_total
