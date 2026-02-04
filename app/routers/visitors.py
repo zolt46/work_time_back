@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..deps import get_db
-from ..core.roles import get_current_user
+from ..core.roles import get_current_user, require_role
 
 router = APIRouter(prefix="/visitors", tags=["visitors"])
 
@@ -57,7 +57,7 @@ def _recalculate_entries(db: Session, year: models.VisitorSchoolYear) -> None:
     )
 
     def apply_entry(entry: models.VisitorDailyCount, previous_total: int) -> None:
-        has_counts = entry.count1 is not None or entry.count2 is not None
+        has_counts = (entry.count1 is not None or entry.count2 is not None) and entry.daily_override is None
         total = (entry.count1 or 0) + (entry.count2 or 0) if has_counts else None
         if total is None:
             if entry.daily_override is not None:
@@ -89,7 +89,7 @@ def _recalculate_entries(db: Session, year: models.VisitorSchoolYear) -> None:
     for index in range(anchor_index - 1, -1, -1):
         entry = entries[index]
         next_entry = entries[index + 1]
-        has_counts = entry.count1 is not None or entry.count2 is not None
+        has_counts = (entry.count1 is not None or entry.count2 is not None) and entry.daily_override is None
         if has_counts:
             total = (entry.count1 or 0) + (entry.count2 or 0)
         elif next_entry.previous_total is not None:
@@ -183,7 +183,7 @@ def list_years(db: Session = Depends(get_db), current_user=Depends(get_current_u
 
 
 @router.post("/years", response_model=schemas.VisitorYearOut, status_code=status.HTTP_201_CREATED)
-def create_year(payload: schemas.VisitorYearCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def create_year(payload: schemas.VisitorYearCreate, db: Session = Depends(get_db), current_user=Depends(require_role(models.UserRole.OPERATOR))):
     if db.query(models.VisitorSchoolYear).filter(models.VisitorSchoolYear.academic_year == payload.academic_year).first():
         raise HTTPException(status_code=400, detail="이미 등록된 학년도입니다.")
     start_date, end_date = _default_year_dates(payload.academic_year)
@@ -262,7 +262,7 @@ def get_year_detail(year_id, db: Session = Depends(get_db), current_user=Depends
 
 
 @router.put("/years/{year_id}", response_model=schemas.VisitorYearOut)
-def update_year(year_id, payload: schemas.VisitorYearUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def update_year(year_id, payload: schemas.VisitorYearUpdate, db: Session = Depends(get_db), current_user=Depends(require_role(models.UserRole.OPERATOR))):
     year = _get_year(db, year_id)
     if payload.label is not None:
         year.label = payload.label
@@ -279,7 +279,7 @@ def update_year(year_id, payload: schemas.VisitorYearUpdate, db: Session = Depen
 
 
 @router.put("/years/{year_id}/periods", response_model=list[schemas.VisitorPeriodOut])
-def upsert_periods(year_id, payload: list[schemas.VisitorPeriodUpsert], db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def upsert_periods(year_id, payload: list[schemas.VisitorPeriodUpsert], db: Session = Depends(get_db), current_user=Depends(require_role(models.UserRole.OPERATOR))):
     year = _get_year(db, year_id)
     existing = {
         period.period_type: period
@@ -317,6 +317,15 @@ def upsert_periods(year_id, payload: list[schemas.VisitorPeriodUpsert], db: Sess
 def upsert_entry(year_id, payload: schemas.VisitorEntryCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     year = _get_year(db, year_id)
     _ensure_within_year(year, payload.visit_date)
+    is_operator = current_user.role in (models.UserRole.OPERATOR, models.UserRole.MASTER)
+    today = date.today()
+    if not is_operator:
+        if payload.visit_date != today:
+            raise HTTPException(status_code=403, detail="오늘 날짜만 수정할 수 있습니다.")
+        if payload.baseline_total is not None or payload.daily_override is not None:
+            raise HTTPException(status_code=403, detail="일괄 입력은 운영자 이상만 가능합니다.")
+        if payload.count1 is None or payload.count2 is None:
+            raise HTTPException(status_code=400, detail="Count 1과 Count 2를 모두 입력하세요.")
     entry = (
         db.query(models.VisitorDailyCount)
         .filter(
@@ -326,6 +335,11 @@ def upsert_entry(year_id, payload: schemas.VisitorEntryCreate, db: Session = Dep
         .first()
     )
     if entry:
+        if not is_operator:
+            if entry.created_by != current_user.id:
+                raise HTTPException(status_code=403, detail="본인이 입력한 기록만 수정할 수 있습니다.")
+            if entry.visit_date != today:
+                raise HTTPException(status_code=403, detail="오늘 날짜만 수정할 수 있습니다.")
         entry.count1 = payload.count1
         entry.count2 = payload.count2
         entry.baseline_total = payload.baseline_total
@@ -377,6 +391,13 @@ def delete_entry(year_id, entry_id, db: Session = Depends(get_db), current_user=
     )
     if not entry:
         raise HTTPException(status_code=404, detail="기록을 찾을 수 없습니다.")
+    is_operator = current_user.role in (models.UserRole.OPERATOR, models.UserRole.MASTER)
+    today = date.today()
+    if not is_operator:
+        if entry.created_by != current_user.id:
+            raise HTTPException(status_code=403, detail="본인이 입력한 기록만 삭제할 수 있습니다.")
+        if entry.visit_date != today:
+            raise HTTPException(status_code=403, detail="오늘 날짜만 삭제할 수 있습니다.")
     db.delete(entry)
     _recalculate_entries(db, year)
     db.commit()
