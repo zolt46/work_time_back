@@ -371,6 +371,10 @@ class VisitorSchoolYear(Base):
 
     periods = relationship("VisitorPeriod", back_populates="school_year", cascade="all, delete-orphan")
     entries = relationship("VisitorDailyCount", back_populates="school_year", cascade="all, delete-orphan")
+    running_total = relationship("VisitorRunningTotal", back_populates="school_year", uselist=False, cascade="all, delete-orphan")
+    monthly_stats = relationship("VisitorMonthlyStat", back_populates="school_year", cascade="all, delete-orphan")
+    period_stats = relationship("VisitorPeriodStat", back_populates="school_year", cascade="all, delete-orphan")
+    year_stats = relationship("VisitorYearStat", back_populates="school_year", uselist=False, cascade="all, delete-orphan")
 
 
 class VisitorPeriod(Base):
@@ -411,12 +415,6 @@ class VisitorDailyCount(Base):
     )
     school_year_id = Column(UUID(as_uuid=True), ForeignKey("visitor_school_years.id", ondelete="CASCADE"), nullable=False)
     visit_date = Column(Date, nullable=False)
-    count1 = Column(Integer)
-    count2 = Column(Integer)
-    baseline_total = Column(Integer)
-    daily_override = Column(Integer)
-    total_count = Column(Integer, nullable=False, default=0)
-    previous_total = Column(Integer, nullable=False, default=0)
     daily_visitors = Column(Integer, nullable=False, default=0)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
@@ -435,3 +433,102 @@ class VisitorDailyCount(Base):
     school_year = relationship("VisitorSchoolYear", back_populates="entries")
     creator = relationship("User", foreign_keys=[created_by])
     updater = relationship("User", foreign_keys=[updated_by])
+
+
+class VisitorRunningTotal(Base):
+    __tablename__ = "visitor_running_totals"
+
+    school_year_id = Column(UUID(as_uuid=True), ForeignKey("visitor_school_years.id", ondelete="CASCADE"), primary_key=True)
+    previous_total = Column(Integer)
+    current_total = Column(Integer)
+    current_date = Column(Date)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    school_year = relationship("VisitorSchoolYear", back_populates="running_total")
+
+
+class VisitorMonthlyStat(Base):
+    __tablename__ = "visitor_monthly_stats"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    school_year_id = Column(UUID(as_uuid=True), ForeignKey("visitor_school_years.id", ondelete="CASCADE"), nullable=False)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+    total_visitors = Column(Integer, nullable=False, default=0)
+    open_days = Column(Integer, nullable=False, default=0)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    school_year = relationship("VisitorSchoolYear", back_populates="monthly_stats")
+
+
+class VisitorPeriodStat(Base):
+    __tablename__ = "visitor_period_stats"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    school_year_id = Column(UUID(as_uuid=True), ForeignKey("visitor_school_years.id", ondelete="CASCADE"), nullable=False)
+    period_id = Column(UUID(as_uuid=True), ForeignKey("visitor_periods.id", ondelete="CASCADE"), nullable=False)
+    total_visitors = Column(Integer, nullable=False, default=0)
+    open_days = Column(Integer, nullable=False, default=0)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    school_year = relationship("VisitorSchoolYear", back_populates="period_stats")
+    period = relationship("VisitorPeriod")
+
+
+class VisitorYearStat(Base):
+    __tablename__ = "visitor_year_stats"
+
+    school_year_id = Column(UUID(as_uuid=True), ForeignKey("visitor_school_years.id", ondelete="CASCADE"), primary_key=True)
+    total_visitors = Column(Integer, nullable=False, default=0)
+    open_days = Column(Integer, nullable=False, default=0)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    school_year = relationship("VisitorSchoolYear", back_populates="year_stats")
