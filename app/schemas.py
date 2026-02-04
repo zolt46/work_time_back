@@ -385,6 +385,18 @@ class VisitorEntryCreate(BaseModel):
     daily_override: int | None = None
 
 
+class VisitorBulkEntryItem(BaseModel):
+    visit_date: date
+    count1: int | None = None
+    count2: int | None = None
+    baseline_total: int | None = None
+    daily_override: int | None = None
+
+
+class VisitorBulkEntryRequest(BaseModel):
+    entries: list[VisitorBulkEntryItem]
+
+
 class VisitorEntryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -21,6 +21,9 @@ PERIOD_DEFAULTS = {
     models.VisitorPeriodType.WINTER_BREAK: "겨울방학",
 }
 
+MAX_DAILY_VISITORS = 1_000_000
+MAX_TOTAL_VISITORS = 100_000_000
+MAX_COUNT_GAP = 10_000
 
 def _default_year_dates(academic_year: int) -> tuple[date, date]:
     start_date = date(academic_year, 3, 1)
@@ -40,6 +43,32 @@ def _ensure_within_year(year: models.VisitorSchoolYear, visit_date: date) -> Non
     if visit_date < year.start_date or visit_date > year.end_date:
         raise HTTPException(status_code=400, detail="학년도 기간 밖의 날짜입니다.")
 
+
+def _ensure_non_negative(label: str, value: int | None, max_value: int) -> None:
+    if value is None:
+        return
+    if value < 0:
+        raise HTTPException(status_code=400, detail=f"{label}은(는) 0 이상이어야 합니다.")
+    if value > max_value:
+        raise HTTPException(status_code=400, detail=f"{label}은(는) {max_value:,} 이하만 입력할 수 있습니다.")
+
+
+def _validate_entry_payload(payload: schemas.VisitorEntryCreate, *, allow_counts: bool) -> None:
+    _ensure_non_negative("Count 1", payload.count1, MAX_DAILY_VISITORS)
+    _ensure_non_negative("Count 2", payload.count2, MAX_DAILY_VISITORS)
+    _ensure_non_negative("전일 합산 기준값", payload.baseline_total, MAX_TOTAL_VISITORS)
+    _ensure_non_negative("금일 출입자", payload.daily_override, MAX_DAILY_VISITORS)
+
+    if payload.count1 is not None and payload.count2 is not None:
+        if abs(payload.count1 - payload.count2) >= MAX_COUNT_GAP:
+            raise HTTPException(status_code=400, detail="Count 1과 Count 2 차이가 너무 큽니다.")
+
+    if payload.daily_override is not None or payload.baseline_total is not None:
+        if payload.count1 is not None or payload.count2 is not None:
+            raise HTTPException(status_code=400, detail="일괄 입력은 Count 1/2 없이 입력하세요.")
+
+    if not allow_counts and (payload.count1 is not None or payload.count2 is not None):
+        raise HTTPException(status_code=400, detail="일괄 입력에서는 Count 1/2를 사용할 수 없습니다.")
 
 def _recalculate_entries(db: Session, year: models.VisitorSchoolYear) -> None:
     entries = (
@@ -326,6 +355,7 @@ def upsert_entry(year_id, payload: schemas.VisitorEntryCreate, db: Session = Dep
             raise HTTPException(status_code=403, detail="일괄 입력은 운영자 이상만 가능합니다.")
         if payload.count1 is None or payload.count2 is None:
             raise HTTPException(status_code=400, detail="Count 1과 Count 2를 모두 입력하세요.")
+    _validate_entry_payload(payload, allow_counts=is_operator or (payload.count1 is not None or payload.count2 is not None))
     entry = (
         db.query(models.VisitorDailyCount)
         .filter(
@@ -379,6 +409,92 @@ def upsert_entry(year_id, payload: schemas.VisitorEntryCreate, db: Session = Dep
         created_at=entry.created_at,
         updated_at=entry.updated_at,
     )
+
+
+@router.post("/years/{year_id}/entries/bulk", response_model=list[schemas.VisitorEntryOut])
+def bulk_upsert_entries(
+    year_id,
+    payload: schemas.VisitorBulkEntryRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(models.UserRole.OPERATOR)),
+):
+    year = _get_year(db, year_id)
+    if not payload.entries:
+        raise HTTPException(status_code=400, detail="입력할 데이터가 없습니다.")
+
+    seen_dates: set[date] = set()
+    for item in payload.entries:
+        _ensure_within_year(year, item.visit_date)
+        _validate_entry_payload(item, allow_counts=False)
+        if item.visit_date in seen_dates:
+            raise HTTPException(status_code=400, detail="중복된 날짜가 포함되어 있습니다.")
+        seen_dates.add(item.visit_date)
+
+    dates = list(seen_dates)
+    existing_entries = (
+        db.query(models.VisitorDailyCount)
+        .filter(
+            models.VisitorDailyCount.school_year_id == year.id,
+            models.VisitorDailyCount.visit_date.in_(dates),
+        )
+        .all()
+    )
+    existing_map = {entry.visit_date: entry for entry in existing_entries}
+    updated_entries: list[models.VisitorDailyCount] = []
+
+    try:
+        for item in payload.entries:
+            entry = existing_map.get(item.visit_date)
+            if entry:
+                entry.count1 = item.count1
+                entry.count2 = item.count2
+                entry.baseline_total = item.baseline_total
+                entry.daily_override = item.daily_override
+                entry.updated_by = current_user.id
+            else:
+                entry = models.VisitorDailyCount(
+                    school_year_id=year.id,
+                    visit_date=item.visit_date,
+                    count1=item.count1,
+                    count2=item.count2,
+                    baseline_total=item.baseline_total,
+                    daily_override=item.daily_override,
+                    created_by=current_user.id,
+                    updated_by=current_user.id,
+                )
+                db.add(entry)
+            updated_entries.append(entry)
+        _recalculate_entries(db, year)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="일괄 저장 중 오류가 발생했습니다.") from exc
+
+    users = {u.id: u for u in db.query(models.User).all()}
+    results: list[schemas.VisitorEntryOut] = []
+    for entry in updated_entries:
+        db.refresh(entry)
+        results.append(
+            schemas.VisitorEntryOut(
+                id=entry.id,
+                school_year_id=entry.school_year_id,
+                visit_date=entry.visit_date,
+                count1=entry.count1,
+                count2=entry.count2,
+                baseline_total=entry.baseline_total,
+                daily_override=entry.daily_override,
+                total_count=entry.total_count,
+                previous_total=entry.previous_total,
+                daily_visitors=entry.daily_visitors,
+                created_by=entry.created_by,
+                updated_by=entry.updated_by,
+                created_by_name=users.get(entry.created_by).name if entry.created_by in users else None,
+                updated_by_name=users.get(entry.updated_by).name if entry.updated_by in users else None,
+                created_at=entry.created_at,
+                updated_at=entry.updated_at,
+            )
+        )
+    return results
 
 
 @router.delete("/years/{year_id}/entries/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
