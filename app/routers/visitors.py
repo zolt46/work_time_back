@@ -85,6 +85,14 @@ def _recalculate_entries(db: Session, year: models.VisitorSchoolYear) -> None:
         0,
     )
 
+    def ensure_baseline(entry: models.VisitorDailyCount) -> None:
+        if entry.baseline_total is None and (
+            entry.count1 is not None
+            or entry.count2 is not None
+            or entry.daily_override is not None
+        ):
+            entry.baseline_total = entry.previous_total
+
     def apply_entry(entry: models.VisitorDailyCount, previous_total: int) -> None:
         has_counts = (entry.count1 is not None or entry.count2 is not None) and entry.daily_override is None
         total = (entry.count1 or 0) + (entry.count2 or 0) if has_counts else None
@@ -101,6 +109,7 @@ def _recalculate_entries(db: Session, year: models.VisitorSchoolYear) -> None:
             entry.daily_visitors = entry.total_count - entry.previous_total
         else:
             entry.daily_visitors = 0
+        ensure_baseline(entry)
 
     anchor_entry = entries[anchor_index]
     anchor_prev_total = anchor_entry.baseline_total
@@ -132,6 +141,7 @@ def _recalculate_entries(db: Session, year: models.VisitorSchoolYear) -> None:
         else:
             entry.previous_total = total
             entry.daily_visitors = 0
+        ensure_baseline(entry)
     db.flush()
 
 
