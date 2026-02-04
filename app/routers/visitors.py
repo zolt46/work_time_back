@@ -57,13 +57,21 @@ def _recalculate_entries(db: Session, year: models.VisitorSchoolYear) -> None:
     )
 
     def apply_entry(entry: models.VisitorDailyCount, previous_total: int) -> None:
-        entry.total_count = (entry.count1 or 0) + (entry.count2 or 0)
+        has_counts = entry.count1 is not None or entry.count2 is not None
+        total = (entry.count1 or 0) + (entry.count2 or 0) if has_counts else None
+        if total is None:
+            if entry.daily_override is not None:
+                total = previous_total + entry.daily_override
+            else:
+                total = previous_total
+        entry.total_count = total
         entry.previous_total = previous_total
-        entry.daily_visitors = (
-            entry.daily_override
-            if entry.daily_override is not None
-            else entry.total_count - entry.previous_total
-        )
+        if entry.daily_override is not None:
+            entry.daily_visitors = entry.daily_override
+        elif has_counts:
+            entry.daily_visitors = entry.total_count - entry.previous_total
+        else:
+            entry.daily_visitors = 0
 
     anchor_entry = entries[anchor_index]
     anchor_prev_total = anchor_entry.baseline_total
@@ -81,9 +89,13 @@ def _recalculate_entries(db: Session, year: models.VisitorSchoolYear) -> None:
     for index in range(anchor_index - 1, -1, -1):
         entry = entries[index]
         next_entry = entries[index + 1]
-        total = (entry.count1 or 0) + (entry.count2 or 0)
-        if total == 0 and next_entry.previous_total is not None:
+        has_counts = entry.count1 is not None or entry.count2 is not None
+        if has_counts:
+            total = (entry.count1 or 0) + (entry.count2 or 0)
+        elif next_entry.previous_total is not None:
             total = next_entry.previous_total
+        else:
+            total = 0
         entry.total_count = total
         if entry.daily_override is not None:
             entry.previous_total = total - entry.daily_override
