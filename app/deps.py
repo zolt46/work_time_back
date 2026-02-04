@@ -66,7 +66,7 @@ def initialize_database() -> None:
                         school_year_id UUID PRIMARY KEY REFERENCES visitor_school_years(id) ON DELETE CASCADE,
                         previous_total INTEGER,
                         current_total INTEGER,
-                        current_date DATE,
+                        running_date DATE,
                         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     );

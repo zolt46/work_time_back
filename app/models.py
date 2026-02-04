@@ -356,7 +356,6 @@ class VisitorSchoolYear(Base):
     label = Column(String, nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
-    initial_total = Column(Integer, nullable=False, default=0)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
@@ -441,7 +440,7 @@ class VisitorRunningTotal(Base):
     school_year_id = Column(UUID(as_uuid=True), ForeignKey("visitor_school_years.id", ondelete="CASCADE"), primary_key=True)
     previous_total = Column(Integer)
     current_total = Column(Integer)
-    current_date = Column(Date)
+    running_date = Column(Date)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

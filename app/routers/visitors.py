@@ -5,7 +5,7 @@ import calendar
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from .. import models, schemas
 from ..deps import get_db
@@ -169,21 +169,20 @@ def _rebuild_period_stats(db: Session, year: models.VisitorSchoolYear) -> None:
         )
 
 
-def _rebuild_all_stats(db: Session, year: models.VisitorSchoolYear) -> None:
-    entries = (
-        db.query(models.VisitorDailyCount)
-        .filter(models.VisitorDailyCount.school_year_id == year.id)
+def _ensure_monthly_stats(db: Session, year: models.VisitorSchoolYear, entries: list[models.VisitorDailyCount]) -> list[models.VisitorMonthlyStat]:
+    existing_stats = (
+        db.query(models.VisitorMonthlyStat)
+        .filter(models.VisitorMonthlyStat.school_year_id == year.id)
         .all()
     )
-    db.query(models.VisitorMonthlyStat).filter(models.VisitorMonthlyStat.school_year_id == year.id).delete()
-    db.query(models.VisitorYearStat).filter(models.VisitorYearStat.school_year_id == year.id).delete()
-    db.query(models.VisitorPeriodStat).filter(models.VisitorPeriodStat.school_year_id == year.id).delete()
-
-    monthly_map: dict[tuple[int, int], list[models.VisitorDailyCount]] = {}
+    existing_keys = {(stat.year, stat.month) for stat in existing_stats}
+    grouped: dict[tuple[int, int], list[models.VisitorDailyCount]] = {}
     for entry in entries:
         key = (entry.visit_date.year, entry.visit_date.month)
-        monthly_map.setdefault(key, []).append(entry)
-    for (year_value, month_value), items in monthly_map.items():
+        grouped.setdefault(key, []).append(entry)
+    for (year_value, month_value), items in grouped.items():
+        if (year_value, month_value) in existing_keys:
+            continue
         db.add(
             models.VisitorMonthlyStat(
                 school_year_id=year.id,
@@ -193,14 +192,67 @@ def _rebuild_all_stats(db: Session, year: models.VisitorSchoolYear) -> None:
                 open_days=len(items),
             )
         )
-    db.add(
-        models.VisitorYearStat(
-            school_year_id=year.id,
-            total_visitors=sum(entry.daily_visitors for entry in entries),
-            open_days=len(entries),
-        )
+    return existing_stats
+
+
+def _ensure_year_stat(
+    db: Session,
+    year: models.VisitorSchoolYear,
+    entries: list[models.VisitorDailyCount],
+    monthly_stats: list[models.VisitorMonthlyStat],
+) -> models.VisitorYearStat:
+    year_stat = (
+        db.query(models.VisitorYearStat)
+        .filter(models.VisitorYearStat.school_year_id == year.id)
+        .first()
     )
-    _rebuild_period_stats(db, year)
+    if year_stat:
+        return year_stat
+    if monthly_stats:
+        total_visitors = sum(stat.total_visitors for stat in monthly_stats)
+        open_days = sum(stat.open_days for stat in monthly_stats)
+    else:
+        total_visitors = sum(entry.daily_visitors for entry in entries)
+        open_days = len(entries)
+    year_stat = models.VisitorYearStat(
+        school_year_id=year.id,
+        total_visitors=total_visitors,
+        open_days=open_days,
+    )
+    db.add(year_stat)
+    return year_stat
+
+
+def _ensure_period_stats(
+    db: Session,
+    year: models.VisitorSchoolYear,
+    periods: list[models.VisitorPeriod],
+    entries: list[models.VisitorDailyCount],
+) -> None:
+    existing_stats = (
+        db.query(models.VisitorPeriodStat)
+        .filter(models.VisitorPeriodStat.school_year_id == year.id)
+        .all()
+    )
+    existing_period_ids = {stat.period_id for stat in existing_stats}
+    for period in periods:
+        if period.id in existing_period_ids:
+            continue
+        if not period.start_date or not period.end_date:
+            continue
+        period_entries = [
+            entry
+            for entry in entries
+            if period.start_date <= entry.visit_date <= period.end_date
+        ]
+        db.add(
+            models.VisitorPeriodStat(
+                school_year_id=year.id,
+                period_id=period.id,
+                total_visitors=sum(entry.daily_visitors for entry in period_entries),
+                open_days=len(period_entries),
+            )
+        )
 
 
 def _month_iter(start_date: date, end_date: date):
@@ -282,7 +334,6 @@ def create_year(payload: schemas.VisitorYearCreate, db: Session = Depends(get_db
         label=label,
         start_date=start_date,
         end_date=end_date,
-        initial_total=payload.initial_total or 0,
     )
     db.add(year)
     db.flush()
@@ -310,48 +361,32 @@ def get_year_detail(year_id, db: Session = Depends(get_db), current_user=Depends
         .order_by(models.VisitorPeriod.period_type.asc())
         .all()
     )
+    creator = aliased(models.User)
+    updater = aliased(models.User)
     entries = (
-        db.query(models.VisitorDailyCount)
+        db.query(
+            models.VisitorDailyCount,
+            creator.name.label("creator_name"),
+            updater.name.label("updater_name"),
+        )
+        .outerjoin(creator, creator.id == models.VisitorDailyCount.created_by)
+        .outerjoin(updater, updater.id == models.VisitorDailyCount.updated_by)
         .filter(models.VisitorDailyCount.school_year_id == year.id)
         .order_by(models.VisitorDailyCount.visit_date.desc())
         .all()
     )
-    monthly_stats = (
-        db.query(models.VisitorMonthlyStat)
-        .filter(models.VisitorMonthlyStat.school_year_id == year.id)
-        .all()
-    )
+    entry_records = [row[0] for row in entries]
+    monthly_stats = _ensure_monthly_stats(db, year, entry_records)
+    year_stat = _ensure_year_stat(db, year, entry_records, monthly_stats)
+    _ensure_period_stats(db, year, periods, entry_records)
+    db.flush()
     period_stats = (
         db.query(models.VisitorPeriodStat)
         .filter(models.VisitorPeriodStat.school_year_id == year.id)
         .all()
     )
-    year_stat = (
-        db.query(models.VisitorYearStat)
-        .filter(models.VisitorYearStat.school_year_id == year.id)
-        .first()
-    )
-    if year_stat is None and entries:
-        _rebuild_all_stats(db, year)
-        db.commit()
-        monthly_stats = (
-            db.query(models.VisitorMonthlyStat)
-            .filter(models.VisitorMonthlyStat.school_year_id == year.id)
-            .all()
-        )
-        period_stats = (
-            db.query(models.VisitorPeriodStat)
-            .filter(models.VisitorPeriodStat.school_year_id == year.id)
-            .all()
-        )
-        year_stat = (
-            db.query(models.VisitorYearStat)
-            .filter(models.VisitorYearStat.school_year_id == year.id)
-            .first()
-        )
-    users = {u.id: u for u in db.query(models.User).all()}
     entry_out = []
-    for entry in entries:
+    for entry, creator_name, updater_name in entries:
         entry_out.append(
             schemas.VisitorEntryOut(
                 id=entry.id,
@@ -360,8 +395,8 @@ def get_year_detail(year_id, db: Session = Depends(get_db), current_user=Depends
                 daily_visitors=entry.daily_visitors,
                 created_by=entry.created_by,
                 updated_by=entry.updated_by,
-                created_by_name=users.get(entry.created_by).name if entry.created_by in users else None,
-                updated_by_name=users.get(entry.updated_by).name if entry.updated_by in users else None,
+                created_by_name=creator_name,
+                updated_by_name=updater_name,
                 created_at=entry.created_at,
                 updated_at=entry.updated_at,
             )
@@ -384,8 +419,6 @@ def update_year(year_id, payload: schemas.VisitorYearUpdate, db: Session = Depen
         year.start_date = payload.start_date
     if payload.end_date is not None:
         year.end_date = payload.end_date
-    if payload.initial_total is not None:
-        year.initial_total = payload.initial_total
     db.commit()
     db.refresh(year)
     return year
@@ -440,18 +473,18 @@ def load_running_total(year_id, db: Session = Depends(get_db), current_user=Depe
     year = _get_year(db, year_id)
     running = _get_running_total(db, year)
     today = date.today()
-    if running.current_date is None:
-        running.current_date = today
-    elif running.current_date < today:
+    if running.running_date is None:
+        running.running_date = today
+    elif running.running_date < today:
         running.previous_total = running.current_total
         running.current_total = None
-        running.current_date = today
+        running.running_date = today
     db.commit()
     db.refresh(running)
     return schemas.VisitorRunningTotalOut(
         previous_total=running.previous_total,
         current_total=running.current_total,
-        current_date=running.current_date,
+        running_date=running.running_date,
     )
 
 
@@ -493,7 +526,7 @@ def upsert_entry(year_id, payload: schemas.VisitorEntryCreate, db: Session = Dep
     running = _get_running_total(db, year)
     running.previous_total = payload.previous_total
     running.current_total = payload.previous_total + payload.daily_visitors
-    running.current_date = today
+    running.running_date = today
     _apply_entry_delta(db, year, payload.visit_date, delta_visitors, 0 if entry.id else 1)
     db.commit()
     db.refresh(entry)
@@ -645,7 +678,7 @@ def delete_entry(year_id, entry_id, db: Session = Depends(get_db), current_user=
     _apply_entry_delta(db, year, entry.visit_date, -entry.daily_visitors, -1)
     if entry.visit_date == today:
         running = _get_running_total(db, year)
-        if running.current_date == today:
+        if running.running_date == today:
             running.current_total = None
     db.commit()
     return None

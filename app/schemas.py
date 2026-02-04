@@ -326,7 +326,6 @@ class VisitorYearBase(BaseModel):
     label: str | None = None
     start_date: date | None = None
     end_date: date | None = None
-    initial_total: int = 0
 
 
 class VisitorYearCreate(VisitorYearBase):
@@ -337,7 +336,6 @@ class VisitorYearUpdate(BaseModel):
     label: str | None = None
     start_date: date | None = None
     end_date: date | None = None
-    initial_total: int | None = None
 
 
 class VisitorYearOut(BaseModel):
@@ -348,7 +346,6 @@ class VisitorYearOut(BaseModel):
     label: str
     start_date: date
     end_date: date
-    initial_total: int
     created_at: datetime
     updated_at: datetime
 
@@ -392,14 +389,6 @@ class VisitorBulkEntryRequest(BaseModel):
     entries: list[VisitorBulkEntryItem]
 
 
-class VisitorBulkEntryItem(BaseModel):
-    visit_date: date
-    count1: int | None = None
-    count2: int | None = None
-    baseline_total: int | None = None
-    daily_override: int | None = None
-
-
 class VisitorBulkEntryRequest(BaseModel):
     entries: list[VisitorBulkEntryItem]
 
@@ -422,7 +411,7 @@ class VisitorEntryOut(BaseModel):
 class VisitorRunningTotalOut(BaseModel):
     previous_total: int | None = None
     current_total: int | None = None
-    current_date: date | None = None
+    running_date: date | None = None
 
 
 class VisitorMonthlyStat(BaseModel):
