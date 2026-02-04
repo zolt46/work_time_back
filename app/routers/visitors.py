@@ -317,6 +317,14 @@ def update_year(year_id, payload: schemas.VisitorYearUpdate, db: Session = Depen
     return year
 
 
+@router.delete("/years/{year_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_year(year_id, db: Session = Depends(get_db), current_user=Depends(require_role(models.UserRole.OPERATOR))):
+    year = _get_year(db, year_id)
+    db.delete(year)
+    db.commit()
+    return None
+
+
 @router.put("/years/{year_id}/periods", response_model=list[schemas.VisitorPeriodOut])
 def upsert_periods(year_id, payload: list[schemas.VisitorPeriodUpsert], db: Session = Depends(get_db), current_user=Depends(require_role(models.UserRole.OPERATOR))):
     year = _get_year(db, year_id)
@@ -419,6 +427,36 @@ def upsert_entry(year_id, payload: schemas.VisitorEntryCreate, db: Session = Dep
         created_at=entry.created_at,
         updated_at=entry.updated_at,
     )
+
+
+@router.delete("/years/{year_id}/entries", status_code=status.HTTP_204_NO_CONTENT)
+def delete_entries(
+    year_id,
+    month: str | None = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(models.UserRole.OPERATOR)),
+):
+    year = _get_year(db, year_id)
+    query = db.query(models.VisitorDailyCount).filter(models.VisitorDailyCount.school_year_id == year.id)
+    if month:
+        try:
+            year_value, month_value = month.split("-")
+            year_int = int(year_value)
+            month_int = int(month_value)
+            if not (1 <= month_int <= 12):
+                raise ValueError
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="월 형식은 YYYY-MM 이어야 합니다.") from exc
+        start_date = date(year_int, month_int, 1)
+        end_day = calendar.monthrange(year_int, month_int)[1]
+        end_date = date(year_int, month_int, end_day)
+        query = query.filter(models.VisitorDailyCount.visit_date.between(start_date, end_date))
+    if query.count():
+        query.delete(synchronize_session=False)
+        db.flush()
+        _recalculate_entries(db, year)
+    db.commit()
+    return None
 
 
 @router.post("/years/{year_id}/entries/bulk", response_model=list[schemas.VisitorEntryOut])
