@@ -80,10 +80,8 @@ def _recalculate_entries(db: Session, year: models.VisitorSchoolYear) -> None:
     if not entries:
         return
 
-    anchor_index = next(
-        (index for index, entry in enumerate(entries) if entry.baseline_total is not None),
-        0,
-    )
+    baseline_candidates = [index for index, entry in enumerate(entries) if entry.baseline_total is not None]
+    anchor_index = baseline_candidates[-1] if baseline_candidates else len(entries) - 1
 
     def ensure_baseline(entry: models.VisitorDailyCount) -> None:
         if entry.baseline_total is None and (
@@ -109,10 +107,11 @@ def _recalculate_entries(db: Session, year: models.VisitorSchoolYear) -> None:
             entry.daily_visitors = entry.total_count - entry.previous_total
         else:
             entry.daily_visitors = 0
-        ensure_baseline(entry)
 
     anchor_entry = entries[anchor_index]
     anchor_prev_total = anchor_entry.baseline_total
+    if anchor_prev_total is None:
+        anchor_prev_total = anchor_entry.previous_total
     if anchor_prev_total is None:
         anchor_prev_total = year.initial_total or 0
     apply_entry(anchor_entry, anchor_prev_total)
