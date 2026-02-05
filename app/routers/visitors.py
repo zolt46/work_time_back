@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import calendar
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
@@ -29,6 +29,51 @@ def _default_year_dates(academic_year: int) -> tuple[date, date]:
     end_day = calendar.monthrange(academic_year + 1, 2)[1]
     end_date = date(academic_year + 1, 2, end_day)
     return start_date, end_date
+
+
+def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
+    first_weekday, _ = calendar.monthrange(year, month)
+    offset = (weekday - first_weekday) % 7
+    day = 1 + offset + (n - 1) * 7
+    return date(year, month, day)
+
+
+def _last_weekday(year: int, month: int, weekday: int) -> date:
+    last_day = calendar.monthrange(year, month)[1]
+    last_date = date(year, month, last_day)
+    offset = (last_date.weekday() - weekday) % 7
+    return last_date - timedelta(days=offset)
+
+
+def _clamp_range(start: date, end: date, year_start: date, year_end: date) -> tuple[date, date]:
+    clamped_start = max(start, year_start)
+    clamped_end = min(end, year_end)
+    if clamped_end < clamped_start:
+        clamped_end = clamped_start
+    return clamped_start, clamped_end
+
+
+def _default_period_ranges(academic_year: int, year_start: date, year_end: date) -> dict[models.VisitorPeriodType, tuple[date, date]]:
+    summer_start = _nth_weekday(academic_year, 6, 0, 4)
+    summer_end = _last_weekday(academic_year, 8, 4)
+    winter_start = _nth_weekday(academic_year, 12, 0, 4)
+    winter_end = _last_weekday(academic_year + 1, 2, 4)
+
+    semester1_start = year_start
+    semester1_end = summer_start - timedelta(days=1)
+    semester2_start = summer_end + timedelta(days=1)
+    semester2_end = winter_start - timedelta(days=1)
+
+    ranges = {
+        models.VisitorPeriodType.SEMESTER_1: (semester1_start, semester1_end),
+        models.VisitorPeriodType.SUMMER_BREAK: (summer_start, summer_end),
+        models.VisitorPeriodType.SEMESTER_2: (semester2_start, semester2_end),
+        models.VisitorPeriodType.WINTER_BREAK: (winter_start, winter_end),
+    }
+    return {
+        period_type: _clamp_range(start, end, year_start, year_end)
+        for period_type, (start, end) in ranges.items()
+    }
 
 
 def _get_year(db: Session, year_id) -> models.VisitorSchoolYear:
@@ -353,6 +398,8 @@ def create_year(payload: schemas.VisitorYearCreate, db: Session = Depends(get_db
         start_date = payload.start_date
     if payload.end_date:
         end_date = payload.end_date
+    default_periods = _default_period_ranges(payload.academic_year, start_date, end_date)
+    period_overrides = {item.period_type: item for item in (payload.periods or [])}
     label = payload.label or f"{payload.academic_year}학년도 참고자료실 출입자 통계"
     year = models.VisitorSchoolYear(
         academic_year=payload.academic_year,
@@ -363,11 +410,17 @@ def create_year(payload: schemas.VisitorYearCreate, db: Session = Depends(get_db
     db.add(year)
     db.flush()
     for period_type, default_name in PERIOD_DEFAULTS.items():
+        override = period_overrides.get(period_type)
+        default_start, default_end = default_periods[period_type]
+        start_value = override.start_date if override and override.start_date else default_start
+        end_value = override.end_date if override and override.end_date else default_end
         db.add(
             models.VisitorPeriod(
                 school_year_id=year.id,
                 period_type=period_type,
                 name=default_name,
+                start_date=start_value,
+                end_date=end_value,
             )
         )
     db.add(models.VisitorRunningTotal(school_year_id=year.id))
@@ -483,38 +536,7 @@ def delete_year(year_id, db: Session = Depends(get_db), current_user=Depends(req
 
 @router.put("/years/{year_id}/periods", response_model=list[schemas.VisitorPeriodOut])
 def upsert_periods(year_id, payload: list[schemas.VisitorPeriodUpsert], db: Session = Depends(get_db), current_user=Depends(require_role(models.UserRole.OPERATOR))):
-    year = _get_year(db, year_id)
-    existing = {
-        period.period_type: period
-        for period in db.query(models.VisitorPeriod)
-        .filter(models.VisitorPeriod.school_year_id == year.id)
-        .all()
-    }
-    for item in payload:
-        period = existing.get(item.period_type)
-        if period:
-            period.name = item.name
-            period.start_date = item.start_date
-            period.end_date = item.end_date
-        else:
-            db.add(
-                models.VisitorPeriod(
-                    school_year_id=year.id,
-                    period_type=item.period_type,
-                    name=item.name,
-                    start_date=item.start_date,
-                    end_date=item.end_date,
-                )
-            )
-    _rebuild_period_stats(db, year)
-    db.commit()
-    periods = (
-        db.query(models.VisitorPeriod)
-        .filter(models.VisitorPeriod.school_year_id == year.id)
-        .order_by(models.VisitorPeriod.period_type.asc())
-        .all()
-    )
-    return [schemas.VisitorPeriodOut.model_validate(period) for period in periods]
+    raise HTTPException(status_code=403, detail="기간은 학년도 생성 시에만 설정할 수 있습니다.")
 
 
 @router.post("/years/{year_id}/running-total/load", response_model=schemas.VisitorRunningTotalOut)

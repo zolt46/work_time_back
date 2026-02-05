@@ -329,7 +329,7 @@ class VisitorYearBase(BaseModel):
 
 
 class VisitorYearCreate(VisitorYearBase):
-    pass
+    periods: list["VisitorPeriodUpsert"] | None = None
 
 
 class VisitorYearUpdate(BaseModel):
@@ -448,3 +448,4 @@ class VisitorYearDetail(BaseModel):
 # Forward references
 UserOut.model_rebuild()
 RequestCreate.model_rebuild()
+VisitorYearCreate.model_rebuild()
