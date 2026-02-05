@@ -472,13 +472,6 @@ def upsert_periods(year_id, payload: list[schemas.VisitorPeriodUpsert], db: Sess
 def load_running_total(year_id, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     year = _get_year(db, year_id)
     running = _get_running_total(db, year)
-    today = date.today()
-    if running.running_date is None:
-        running.running_date = today
-    elif running.running_date < today:
-        running.previous_total = running.current_total
-        running.current_total = None
-        running.running_date = today
     db.commit()
     db.refresh(running)
     return schemas.VisitorRunningTotalOut(
@@ -525,7 +518,7 @@ def upsert_entry(year_id, payload: schemas.VisitorEntryCreate, db: Session = Dep
         db.add(entry)
     running = _get_running_total(db, year)
     running.previous_total = payload.previous_total
-    running.current_total = payload.previous_total + payload.daily_visitors
+    running.current_total = payload.previous_total
     running.running_date = today
     _apply_entry_delta(db, year, payload.visit_date, delta_visitors, 0 if entry.id else 1)
     db.commit()
