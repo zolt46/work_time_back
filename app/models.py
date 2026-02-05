@@ -67,6 +67,11 @@ class VisitorPeriodType(str, enum.Enum):
     WINTER_BREAK = "WINTER_BREAK"
 
 
+class SerialAcquisitionType(str, enum.Enum):
+    DONATION = "DONATION"
+    SUBSCRIPTION = "SUBSCRIPTION"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -531,3 +536,37 @@ class VisitorYearStat(Base):
     )
 
     school_year = relationship("VisitorSchoolYear", back_populates="year_stats")
+
+
+class SerialPublication(Base):
+    __tablename__ = "serial_publications"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    title = Column(String, nullable=False)
+    issn = Column(String)
+    acquisition_type = Column(Enum(SerialAcquisitionType, name="serial_acquisition_type"), nullable=False)
+    shelf_section = Column(String, nullable=False)
+    shelf_row = Column(Integer)
+    shelf_column = Column(Integer)
+    shelf_note = Column(String)
+    remark = Column(String)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    creator = relationship("User", foreign_keys=[created_by])
+    updater = relationship("User", foreign_keys=[updated_by])

@@ -5,7 +5,16 @@ from typing import Optional, List
 from uuid import UUID  # ✅ UUID 타입 추가
 
 from pydantic import BaseModel, Field, ConfigDict
-from .models import UserRole, RequestType, RequestStatus, NoticeType, NoticeChannel, NoticeScope, VisitorPeriodType
+from .models import (
+    UserRole,
+    RequestType,
+    RequestStatus,
+    NoticeType,
+    NoticeChannel,
+    NoticeScope,
+    VisitorPeriodType,
+    SerialAcquisitionType,
+)
 
 
 class Token(BaseModel):
@@ -443,6 +452,50 @@ class VisitorYearDetail(BaseModel):
     periods: list[VisitorPeriodOut]
     entries: list[VisitorEntryOut]
     summary: VisitorSummary
+
+
+class SerialPublicationBase(BaseModel):
+    title: str
+    issn: str | None = None
+    acquisition_type: SerialAcquisitionType
+    shelf_section: str
+    shelf_row: int | None = None
+    shelf_column: int | None = None
+    shelf_note: str | None = None
+    remark: str | None = None
+
+
+class SerialPublicationCreate(SerialPublicationBase):
+    pass
+
+
+class SerialPublicationUpdate(BaseModel):
+    title: str | None = None
+    issn: str | None = None
+    acquisition_type: SerialAcquisitionType | None = None
+    shelf_section: str | None = None
+    shelf_row: int | None = None
+    shelf_column: int | None = None
+    shelf_note: str | None = None
+    remark: str | None = None
+
+
+class SerialPublicationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    title: str
+    issn: str | None = None
+    acquisition_type: SerialAcquisitionType
+    shelf_section: str
+    shelf_row: int | None = None
+    shelf_column: int | None = None
+    shelf_note: str | None = None
+    remark: str | None = None
+    created_by: UUID | None = None
+    updated_by: UUID | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 # Forward references
