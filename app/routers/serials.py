@@ -47,7 +47,7 @@ def list_publications(
     return query.order_by(models.SerialPublication.title.asc()).all()
 
 
-@router.get("/{publication_id}", response_model=schemas.SerialPublicationOut)
+@router.get("/publications/{publication_id}", response_model=schemas.SerialPublicationOut)
 def get_publication(
     publication_id,
     db: Session = Depends(get_db),
@@ -81,7 +81,7 @@ def create_publication(
     return publication
 
 
-@router.put("/{publication_id}", response_model=schemas.SerialPublicationOut)
+@router.put("/publications/{publication_id}", response_model=schemas.SerialPublicationOut)
 def update_publication(
     publication_id,
     payload: schemas.SerialPublicationUpdate,
@@ -113,7 +113,7 @@ def update_publication(
     return publication
 
 
-@router.delete("/{publication_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/publications/{publication_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_publication(
     publication_id,
     db: Session = Depends(get_db),
