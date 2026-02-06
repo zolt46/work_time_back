@@ -147,7 +147,7 @@ def create_layout(
         width=payload.width,
         height=payload.height,
         note=payload.note,
-        config=payload.config,
+        walls=payload.walls,
         created_by=current_user.id,
         updated_by=current_user.id,
     )
@@ -175,9 +175,8 @@ def update_layout(
         layout.height = payload.height
     if payload.note is not None:
         layout.note = payload.note
-    if payload.config is not None:
-        layout.config = payload.config
-
+    if payload.walls is not None:
+        layout.walls = payload.walls
     layout.updated_by = current_user.id
     db.commit()
     db.refresh(layout)
