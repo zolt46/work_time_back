@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -129,7 +130,10 @@ def list_layouts(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return db.query(models.SerialLayout).order_by(models.SerialLayout.created_at.asc()).all()
+    try:
+        return db.query(models.SerialLayout).order_by(models.SerialLayout.created_at.asc()).all()
+    except (ProgrammingError, OperationalError):
+        return []
 
 
 @router.post("/layouts", response_model=schemas.SerialLayoutOut, status_code=status.HTTP_201_CREATED)
@@ -195,7 +199,10 @@ def list_shelf_types(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return db.query(models.SerialShelfType).order_by(models.SerialShelfType.created_at.asc()).all()
+    try:
+        return db.query(models.SerialShelfType).order_by(models.SerialShelfType.created_at.asc()).all()
+    except (ProgrammingError, OperationalError):
+        return []
 
 
 @router.post("/shelf-types", response_model=schemas.SerialShelfTypeOut, status_code=status.HTTP_201_CREATED)
@@ -268,10 +275,13 @@ def list_shelves(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    query = db.query(models.SerialShelf)
-    if layout_id:
-        query = query.filter(models.SerialShelf.layout_id == layout_id)
-    return query.order_by(models.SerialShelf.created_at.asc()).all()
+    try:
+        query = db.query(models.SerialShelf)
+        if layout_id:
+            query = query.filter(models.SerialShelf.layout_id == layout_id)
+        return query.order_by(models.SerialShelf.created_at.asc()).all()
+    except (ProgrammingError, OperationalError):
+        return []
 
 
 @router.post("/shelves", response_model=schemas.SerialShelfOut, status_code=status.HTTP_201_CREATED)
