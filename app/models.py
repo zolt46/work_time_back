@@ -68,6 +68,7 @@ class VisitorPeriodType(str, enum.Enum):
 
 
 class SerialAcquisitionType(str, enum.Enum):
+    UNCLASSIFIED = "UNCLASSIFIED"
     DONATION = "DONATION"
     SUBSCRIPTION = "SUBSCRIPTION"
 
