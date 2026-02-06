@@ -73,6 +73,88 @@ class SerialAcquisitionType(str, enum.Enum):
     SUBSCRIPTION = "SUBSCRIPTION"
 
 
+class SerialLayout(Base):
+    __tablename__ = "serial_layouts"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    name = Column(String, nullable=False)
+    width = Column(Integer, nullable=False, default=800)
+    height = Column(Integer, nullable=False, default=500)
+    note = Column(String)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    shelves = relationship("SerialShelf", back_populates="layout", cascade="all, delete-orphan")
+
+
+class SerialShelfType(Base):
+    __tablename__ = "serial_shelf_types"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    name = Column(String, nullable=False)
+    width = Column(Integer, nullable=False, default=80)
+    height = Column(Integer, nullable=False, default=40)
+    rows = Column(Integer, nullable=False, default=5)
+    columns = Column(Integer, nullable=False, default=5)
+    note = Column(String)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    shelves = relationship("SerialShelf", back_populates="shelf_type", cascade="all, delete-orphan")
+
+
+class SerialShelf(Base):
+    __tablename__ = "serial_shelves"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    layout_id = Column(UUID(as_uuid=True), ForeignKey("serial_layouts.id", ondelete="CASCADE"), nullable=False)
+    shelf_type_id = Column(UUID(as_uuid=True), ForeignKey("serial_shelf_types.id"), nullable=False)
+    code = Column(String, nullable=False)
+    x = Column(Integer, nullable=False, default=0)
+    y = Column(Integer, nullable=False, default=0)
+    rotation = Column(Integer, nullable=False, default=0)
+    note = Column(String)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    layout = relationship("SerialLayout", back_populates="shelves")
+    shelf_type = relationship("SerialShelfType", back_populates="shelves")
+    publications = relationship("SerialPublication", back_populates="shelf")
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -551,6 +633,7 @@ class SerialPublication(Base):
     issn = Column(String)
     acquisition_type = Column(Enum(SerialAcquisitionType, name="serial_acquisition_type"), nullable=False)
     shelf_section = Column(String, nullable=False)
+    shelf_id = Column(UUID(as_uuid=True), ForeignKey("serial_shelves.id"))
     shelf_row = Column(Integer)
     shelf_column = Column(Integer)
     shelf_note = Column(String)
@@ -571,3 +654,4 @@ class SerialPublication(Base):
 
     creator = relationship("User", foreign_keys=[created_by])
     updater = relationship("User", foreign_keys=[updated_by])
+    shelf = relationship("SerialShelf", back_populates="publications")

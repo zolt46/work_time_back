@@ -66,6 +66,7 @@ def create_publication(
         issn=payload.issn,
         acquisition_type=payload.acquisition_type,
         shelf_section=payload.shelf_section,
+        shelf_id=payload.shelf_id,
         shelf_row=payload.shelf_row,
         shelf_column=payload.shelf_column,
         shelf_note=payload.shelf_note,
@@ -95,6 +96,8 @@ def update_publication(
         publication.acquisition_type = payload.acquisition_type
     if payload.shelf_section is not None:
         publication.shelf_section = payload.shelf_section
+    if payload.shelf_id is not None:
+        publication.shelf_id = payload.shelf_id
     if payload.shelf_row is not None:
         publication.shelf_row = payload.shelf_row
     if payload.shelf_column is not None:
@@ -117,5 +120,222 @@ def delete_publication(
 ):
     publication = _get_publication(db, publication_id)
     db.delete(publication)
+    db.commit()
+    return None
+
+
+@router.get("/layouts", response_model=list[schemas.SerialLayoutOut])
+def list_layouts(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return db.query(models.SerialLayout).order_by(models.SerialLayout.created_at.asc()).all()
+
+
+@router.post("/layouts", response_model=schemas.SerialLayoutOut, status_code=status.HTTP_201_CREATED)
+def create_layout(
+    payload: schemas.SerialLayoutCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(models.UserRole.OPERATOR)),
+):
+    layout = models.SerialLayout(
+        name=payload.name,
+        width=payload.width,
+        height=payload.height,
+        note=payload.note,
+        created_by=current_user.id,
+        updated_by=current_user.id,
+    )
+    db.add(layout)
+    db.commit()
+    db.refresh(layout)
+    return layout
+
+
+@router.put("/layouts/{layout_id}", response_model=schemas.SerialLayoutOut)
+def update_layout(
+    layout_id,
+    payload: schemas.SerialLayoutUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(models.UserRole.OPERATOR)),
+):
+    layout = db.query(models.SerialLayout).filter(models.SerialLayout.id == layout_id).first()
+    if not layout:
+        raise HTTPException(status_code=404, detail="배치도를 찾을 수 없습니다.")
+    if payload.name is not None:
+        layout.name = payload.name
+    if payload.width is not None:
+        layout.width = payload.width
+    if payload.height is not None:
+        layout.height = payload.height
+    if payload.note is not None:
+        layout.note = payload.note
+    layout.updated_by = current_user.id
+    db.commit()
+    db.refresh(layout)
+    return layout
+
+
+@router.delete("/layouts/{layout_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_layout(
+    layout_id,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(models.UserRole.OPERATOR)),
+):
+    layout = db.query(models.SerialLayout).filter(models.SerialLayout.id == layout_id).first()
+    if not layout:
+        raise HTTPException(status_code=404, detail="배치도를 찾을 수 없습니다.")
+    db.delete(layout)
+    db.commit()
+    return None
+
+
+@router.get("/shelf-types", response_model=list[schemas.SerialShelfTypeOut])
+def list_shelf_types(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return db.query(models.SerialShelfType).order_by(models.SerialShelfType.created_at.asc()).all()
+
+
+@router.post("/shelf-types", response_model=schemas.SerialShelfTypeOut, status_code=status.HTTP_201_CREATED)
+def create_shelf_type(
+    payload: schemas.SerialShelfTypeCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(models.UserRole.OPERATOR)),
+):
+    shelf_type = models.SerialShelfType(
+        name=payload.name,
+        width=payload.width,
+        height=payload.height,
+        rows=payload.rows,
+        columns=payload.columns,
+        note=payload.note,
+        created_by=current_user.id,
+        updated_by=current_user.id,
+    )
+    db.add(shelf_type)
+    db.commit()
+    db.refresh(shelf_type)
+    return shelf_type
+
+
+@router.put("/shelf-types/{shelf_type_id}", response_model=schemas.SerialShelfTypeOut)
+def update_shelf_type(
+    shelf_type_id,
+    payload: schemas.SerialShelfTypeUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(models.UserRole.OPERATOR)),
+):
+    shelf_type = db.query(models.SerialShelfType).filter(models.SerialShelfType.id == shelf_type_id).first()
+    if not shelf_type:
+        raise HTTPException(status_code=404, detail="서가 타입을 찾을 수 없습니다.")
+    if payload.name is not None:
+        shelf_type.name = payload.name
+    if payload.width is not None:
+        shelf_type.width = payload.width
+    if payload.height is not None:
+        shelf_type.height = payload.height
+    if payload.rows is not None:
+        shelf_type.rows = payload.rows
+    if payload.columns is not None:
+        shelf_type.columns = payload.columns
+    if payload.note is not None:
+        shelf_type.note = payload.note
+    shelf_type.updated_by = current_user.id
+    db.commit()
+    db.refresh(shelf_type)
+    return shelf_type
+
+
+@router.delete("/shelf-types/{shelf_type_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_shelf_type(
+    shelf_type_id,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(models.UserRole.OPERATOR)),
+):
+    shelf_type = db.query(models.SerialShelfType).filter(models.SerialShelfType.id == shelf_type_id).first()
+    if not shelf_type:
+        raise HTTPException(status_code=404, detail="서가 타입을 찾을 수 없습니다.")
+    db.delete(shelf_type)
+    db.commit()
+    return None
+
+
+@router.get("/shelves", response_model=list[schemas.SerialShelfOut])
+def list_shelves(
+    layout_id: str | None = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    query = db.query(models.SerialShelf)
+    if layout_id:
+        query = query.filter(models.SerialShelf.layout_id == layout_id)
+    return query.order_by(models.SerialShelf.created_at.asc()).all()
+
+
+@router.post("/shelves", response_model=schemas.SerialShelfOut, status_code=status.HTTP_201_CREATED)
+def create_shelf(
+    payload: schemas.SerialShelfCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(models.UserRole.OPERATOR)),
+):
+    shelf = models.SerialShelf(
+        layout_id=payload.layout_id,
+        shelf_type_id=payload.shelf_type_id,
+        code=payload.code,
+        x=payload.x,
+        y=payload.y,
+        rotation=payload.rotation,
+        note=payload.note,
+        created_by=current_user.id,
+        updated_by=current_user.id,
+    )
+    db.add(shelf)
+    db.commit()
+    db.refresh(shelf)
+    return shelf
+
+
+@router.put("/shelves/{shelf_id}", response_model=schemas.SerialShelfOut)
+def update_shelf(
+    shelf_id,
+    payload: schemas.SerialShelfUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(models.UserRole.OPERATOR)),
+):
+    shelf = db.query(models.SerialShelf).filter(models.SerialShelf.id == shelf_id).first()
+    if not shelf:
+        raise HTTPException(status_code=404, detail="서가를 찾을 수 없습니다.")
+    if payload.layout_id is not None:
+        shelf.layout_id = payload.layout_id
+    if payload.shelf_type_id is not None:
+        shelf.shelf_type_id = payload.shelf_type_id
+    if payload.code is not None:
+        shelf.code = payload.code
+    if payload.x is not None:
+        shelf.x = payload.x
+    if payload.y is not None:
+        shelf.y = payload.y
+    if payload.rotation is not None:
+        shelf.rotation = payload.rotation
+    if payload.note is not None:
+        shelf.note = payload.note
+    shelf.updated_by = current_user.id
+    db.commit()
+    db.refresh(shelf)
+    return shelf
+
+
+@router.delete("/shelves/{shelf_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_shelf(
+    shelf_id,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(models.UserRole.OPERATOR)),
+):
+    shelf = db.query(models.SerialShelf).filter(models.SerialShelf.id == shelf_id).first()
+    if not shelf:
+        raise HTTPException(status_code=404, detail="서가를 찾을 수 없습니다.")
+    db.delete(shelf)
     db.commit()
     return None

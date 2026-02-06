@@ -459,6 +459,7 @@ class SerialPublicationBase(BaseModel):
     issn: str | None = None
     acquisition_type: SerialAcquisitionType
     shelf_section: str
+    shelf_id: UUID | None = None
     shelf_row: int | None = None
     shelf_column: int | None = None
     shelf_note: str | None = None
@@ -474,6 +475,7 @@ class SerialPublicationUpdate(BaseModel):
     issn: str | None = None
     acquisition_type: SerialAcquisitionType | None = None
     shelf_section: str | None = None
+    shelf_id: UUID | None = None
     shelf_row: int | None = None
     shelf_column: int | None = None
     shelf_note: str | None = None
@@ -488,10 +490,122 @@ class SerialPublicationOut(BaseModel):
     issn: str | None = None
     acquisition_type: SerialAcquisitionType
     shelf_section: str
+    shelf_id: UUID | None = None
     shelf_row: int | None = None
     shelf_column: int | None = None
     shelf_note: str | None = None
     remark: str | None = None
+    created_by: UUID | None = None
+    updated_by: UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SerialLayoutBase(BaseModel):
+    name: str
+    width: int = 800
+    height: int = 500
+    note: str | None = None
+
+
+class SerialLayoutCreate(SerialLayoutBase):
+    pass
+
+
+class SerialLayoutUpdate(BaseModel):
+    name: str | None = None
+    width: int | None = None
+    height: int | None = None
+    note: str | None = None
+
+
+class SerialLayoutOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    width: int
+    height: int
+    note: str | None = None
+    created_by: UUID | None = None
+    updated_by: UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SerialShelfTypeBase(BaseModel):
+    name: str
+    width: int = 80
+    height: int = 40
+    rows: int = 5
+    columns: int = 5
+    note: str | None = None
+
+
+class SerialShelfTypeCreate(SerialShelfTypeBase):
+    pass
+
+
+class SerialShelfTypeUpdate(BaseModel):
+    name: str | None = None
+    width: int | None = None
+    height: int | None = None
+    rows: int | None = None
+    columns: int | None = None
+    note: str | None = None
+
+
+class SerialShelfTypeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    width: int
+    height: int
+    rows: int
+    columns: int
+    note: str | None = None
+    created_by: UUID | None = None
+    updated_by: UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SerialShelfBase(BaseModel):
+    layout_id: UUID
+    shelf_type_id: UUID
+    code: str
+    x: int
+    y: int
+    rotation: int = 0
+    note: str | None = None
+
+
+class SerialShelfCreate(SerialShelfBase):
+    pass
+
+
+class SerialShelfUpdate(BaseModel):
+    layout_id: UUID | None = None
+    shelf_type_id: UUID | None = None
+    code: str | None = None
+    x: int | None = None
+    y: int | None = None
+    rotation: int | None = None
+    note: str | None = None
+
+
+class SerialShelfOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    layout_id: UUID
+    shelf_type_id: UUID
+    code: str
+    x: int
+    y: int
+    rotation: int
+    note: str | None = None
     created_by: UUID | None = None
     updated_by: UUID | None = None
     created_at: datetime
