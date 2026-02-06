@@ -85,6 +85,8 @@ class SerialLayout(Base):
     width = Column(Integer, nullable=False, default=800)
     height = Column(Integer, nullable=False, default=500)
     note = Column(String)
+    config = Column(JSONB)
+
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)

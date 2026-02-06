@@ -506,6 +506,8 @@ class SerialLayoutBase(BaseModel):
     width: int = 800
     height: int = 500
     note: str | None = None
+    config: dict | None = None
+
 
 
 class SerialLayoutCreate(SerialLayoutBase):
@@ -517,6 +519,8 @@ class SerialLayoutUpdate(BaseModel):
     width: int | None = None
     height: int | None = None
     note: str | None = None
+    config: dict | None = None
+
 
 
 class SerialLayoutOut(BaseModel):
@@ -527,7 +531,9 @@ class SerialLayoutOut(BaseModel):
     width: int
     height: int
     note: str | None = None
+    config: dict | None = None
     created_by: UUID | None = None
+
     updated_by: UUID | None = None
     created_at: datetime
     updated_at: datetime
