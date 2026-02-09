@@ -21,7 +21,14 @@ app = FastAPI(title=settings.PROJECT_NAME)
 # ✅ CORS: 기본적으로 렌더 배포 + GitHub Pages 등 프런트 도메인을 허용
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ALLOW_ORIGINS,
+    # allow_origins=settings.CORS_ALLOW_ORIGINS,  # 기존 설정 (환경변수 의존)
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://zolt46.github.io",
+        "https://work-time-front.onrender.com",
+        "*" # 개발 편의를 위해 당분간 전체 허용 (보안상 추후 제거 필요)
+    ],
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
