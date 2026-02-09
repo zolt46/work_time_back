@@ -637,6 +637,8 @@ class SerialPublication(Base):
     shelf_id = Column(UUID(as_uuid=True), ForeignKey("serial_shelves.id"))
     shelf_row = Column(Integer)
     shelf_column = Column(Integer)
+    shelf_row_end = Column(Integer)
+    shelf_column_end = Column(Integer)
     shelf_note = Column(String)
     remark = Column(String)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
