@@ -70,6 +70,8 @@ def create_publication(
         shelf_id=payload.shelf_id,
         shelf_row=payload.shelf_row,
         shelf_column=payload.shelf_column,
+        shelf_row_end=payload.shelf_row_end,
+        shelf_column_end=payload.shelf_column_end,
         shelf_note=payload.shelf_note,
         remark=payload.remark,
         created_by=current_user.id,
@@ -103,6 +105,10 @@ def update_publication(
         publication.shelf_row = payload.shelf_row
     if payload.shelf_column is not None:
         publication.shelf_column = payload.shelf_column
+    if payload.shelf_row_end is not None:
+        publication.shelf_row_end = payload.shelf_row_end
+    if payload.shelf_column_end is not None:
+        publication.shelf_column_end = payload.shelf_column_end
     if payload.shelf_note is not None:
         publication.shelf_note = payload.shelf_note
     if payload.remark is not None:
