@@ -548,6 +548,7 @@ class SerialShelfTypeBase(BaseModel):
     height: int = 40
     rows: int = 5
     columns: int = 5
+    color: str | None = None
     note: str | None = None
 
 
@@ -561,6 +562,7 @@ class SerialShelfTypeUpdate(BaseModel):
     height: int | None = None
     rows: int | None = None
     columns: int | None = None
+    color: str | None = None
     note: str | None = None
 
 
@@ -573,6 +575,7 @@ class SerialShelfTypeOut(BaseModel):
     height: int
     rows: int
     columns: int
+    color: str | None = None
     note: str | None = None
     created_by: UUID | None = None
     updated_by: UUID | None = None

@@ -112,6 +112,7 @@ class SerialShelfType(Base):
     height = Column(Integer, nullable=False, default=40)
     rows = Column(Integer, nullable=False, default=5)
     columns = Column(Integer, nullable=False, default=5)
+    color = Column(String)  # 서가 타입 색상 (예: #3b82f6)
     note = Column(String)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
