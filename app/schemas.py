@@ -462,6 +462,8 @@ class SerialPublicationBase(BaseModel):
     shelf_id: UUID | None = None
     shelf_row: int | None = None
     shelf_column: int | None = None
+    shelf_row_end: int | None = None
+    shelf_column_end: int | None = None
     shelf_note: str | None = None
     remark: str | None = None
 
@@ -478,6 +480,8 @@ class SerialPublicationUpdate(BaseModel):
     shelf_id: UUID | None = None
     shelf_row: int | None = None
     shelf_column: int | None = None
+    shelf_row_end: int | None = None
+    shelf_column_end: int | None = None
     shelf_note: str | None = None
     remark: str | None = None
 
@@ -493,6 +497,8 @@ class SerialPublicationOut(BaseModel):
     shelf_id: UUID | None = None
     shelf_row: int | None = None
     shelf_column: int | None = None
+    shelf_row_end: int | None = None
+    shelf_column_end: int | None = None
     shelf_note: str | None = None
     remark: str | None = None
     created_by: UUID | None = None
